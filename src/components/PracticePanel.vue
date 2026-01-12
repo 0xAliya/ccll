@@ -280,83 +280,105 @@ function shuffle<T>(source: T[]): T[] {
 
 <style scoped>
 .practice-card {
-  border-radius: 24px;
-  background: var(--bg-card);
-  border: 1px solid rgba(31, 41, 55, 0.08);
+  border-radius: 34px;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85)),
+    var(--practice-card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.75);
   box-shadow: var(--shadow-card);
-  padding: 32px;
+  padding: 36px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.practice-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 85% 20%, rgba(255, 162, 135, 0.25), transparent 40%);
+  z-index: 0;
+}
+.practice-card > * {
+  position: relative;
+  z-index: 1;
 }
 .status-line {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
 }
 .status-group {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: baseline;
 }
 .status-label {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: 0.04em;
 }
 .status-progress {
   color: var(--text-secondary);
 }
 .status-accuracy {
   margin-left: auto;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
 }
 .icon-btn {
   border: none;
-  background: transparent;
-  font-size: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
   cursor: pointer;
   color: var(--text-secondary);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
 }
 .icon-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 .play-zone {
-  border-radius: 20px;
-  border: 1px dashed rgba(31, 41, 55, 0.12);
-  padding: 28px;
-  background: var(--bg-card-soft);
+  border-radius: 28px;
+  padding: 32px;
+  width: 100%;
+  background: var(--play-zone-bg);
+  border: 1px solid rgba(255, 255, 255, 0.8);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   text-align: center;
+  box-shadow: 0 25px 45px rgba(15, 23, 42, 0.1);
 }
 .play-zone--idle {
   opacity: 0.85;
 }
 .dictation-prompt {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   color: var(--text-primary);
 }
 .play-button {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
+  width: 84px;
+  height: 84px;
+  border-radius: 32px;
   border: none;
-  background: var(--primary);
-  color: #fff;
-  font-size: 26px;
+  background: linear-gradient(140deg, var(--primary), var(--primary-hover));
+  color: #fffdf9;
+  font-size: 30px;
   cursor: pointer;
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 35px 45px rgba(255, 123, 84, 0.35);
 }
 .play-button:disabled {
-  background: var(--bg-card);
+  background: rgba(255, 255, 255, 0.6);
   color: var(--text-muted);
   box-shadow: none;
   cursor: not-allowed;
@@ -368,7 +390,7 @@ function shuffle<T>(source: T[]): T[] {
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   font-size: 13px;
   color: var(--text-secondary);
 }
@@ -378,13 +400,16 @@ function shuffle<T>(source: T[]): T[] {
 }
 .answer-form input {
   width: 100%;
-  border-radius: 22px;
-  border: 2px solid rgba(31, 41, 55, 0.12);
-  padding: 22px 26px;
-  font-size: 26px;
-  background: #fff;
+  border-radius: 28px;
+  border: 1px solid rgba(53, 42, 33, 0.14);
+  padding: 24px 30px;
+  font-size: clamp(22px, 5vw, 30px);
+  background: rgba(255, 255, 255, 0.95);
   color: var(--text-primary);
-  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 35px 55px rgba(10, 13, 25, 0.12);
+}
+.answer-form input:disabled {
+  opacity: 0.7;
 }
 .shortcut-hint {
   text-align: center;
@@ -400,27 +425,31 @@ function shuffle<T>(source: T[]): T[] {
 }
 .feedback-correct {
   color: var(--success);
-  font-weight: 600;
+  font-weight: 700;
 }
 .feedback-wrong {
   color: var(--error);
-  font-weight: 600;
+  font-weight: 700;
 }
 .feedback-meaning {
-  margin-top: 12px;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.85);
   display: flex;
   flex-direction: column;
   gap: 8px;
   align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.7);
 }
 .meaning-word {
-  font-size: 32px;
-  font-weight: 600;
+  font-size: 36px;
+  font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 .meaning-translation {
-  font-size: 20px;
+  font-size: 18px;
   color: var(--text-secondary);
 }
 .feedback-placeholder {
@@ -438,7 +467,14 @@ function shuffle<T>(source: T[]): T[] {
 }
 @media (max-width: 640px) {
   .practice-card {
-    padding: 24px;
+    padding: 26px;
+  }
+  .status-line {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .status-accuracy {
+    margin-left: 0;
   }
 }
 </style>

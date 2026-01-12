@@ -131,83 +131,82 @@ function clearTag(item: WordItem) {
 
 <style scoped>
 .word-card {
-  border-radius: 28px;
-  background: var(--bg-card);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 32px;
+  background: var(--word-card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: var(--shadow-card);
-  padding: 28px;
+  padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 .header-row {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
+  align-items: center;
 }
 .word-card h2 {
-  margin: 4px 0;
+  margin: 6px 0;
   color: var(--text-primary);
+  font-size: 28px;
 }
 .word-card .tagline {
   text-transform: uppercase;
   letter-spacing: 0.4em;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-subtle);
 }
 .word-card .count {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
 }
 .return-btn {
   border: none;
   border-radius: 999px;
-  padding: 10px 18px;
-  background: var(--bg-card-soft);
-  color: var(--text-secondary);
+  padding: 12px 22px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
   cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.12);
 }
 .form-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  align-items: center;
 }
 .form-row input {
   flex: 1;
-  min-width: 140px;
+  min-width: 160px;
   border-radius: 18px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(53, 42, 33, 0.14);
   padding: 12px 16px;
-  background: var(--bg-card-soft);
-}
-.form-row button,
-.form-row label {
-  border-radius: 18px;
-  border: none;
-  padding: 12px 20px;
-  font-size: 14px;
-  cursor: pointer;
+  background: rgba(255, 255, 255, 0.85);
 }
 .form-row button {
+  border-radius: 18px;
+  border: none;
+  padding: 12px 24px;
+  font-size: 14px;
+  cursor: pointer;
   background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-  color: #fff;
+  color: #fffdf9;
   box-shadow: var(--shadow-soft);
-}
-.form-row label {
-  background: var(--bg-card-soft);
-  color: var(--text-primary);
-  border: 1px dashed rgba(0, 0, 0, 0.08);
+  font-weight: 600;
 }
 .error-text {
   font-size: 12px;
   color: var(--error);
 }
 .table-wrapper {
-  border-radius: 22px;
-  background: var(--bg-card-soft);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.7);
   overflow: hidden;
+  box-shadow: 0 30px 60px rgba(10, 13, 25, 0.08);
 }
 table {
   width: 100%;
@@ -215,44 +214,41 @@ table {
   font-size: 14px;
 }
 thead {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 142, 98, 0.08);
   color: var(--text-secondary);
 }
 th,
 td {
-  padding: 14px 16px;
+  padding: 16px 18px;
   text-align: left;
 }
-tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.7);
-}
-tbody tr:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.4);
+tbody tr + tr {
+  border-top: 1px solid rgba(15, 23, 42, 0.05);
 }
 .empty-row {
   text-align: center;
-  padding: 32px 0;
+  padding: 36px 0;
   color: var(--text-muted);
 }
 .count-pill {
   display: inline-block;
   margin-left: 8px;
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.12);
   color: var(--success);
   font-size: 12px;
 }
 .tag {
-  display: inline-block;
-  padding: 4px 12px;
+  display: inline-flex;
+  padding: 6px 14px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
 }
 .tag-active {
-  background: rgba(79, 70, 229, 0.1);
-  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.12);
+  color: #3730a3;
 }
 .tag-skip {
   background: rgba(239, 68, 68, 0.12);
@@ -265,20 +261,29 @@ tbody tr:nth-child(odd) {
 .action-cells {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 .mini-btn {
   border: none;
-  border-radius: 14px;
-  padding: 6px 12px;
+  border-radius: 16px;
+  padding: 6px 14px;
   font-size: 12px;
   cursor: pointer;
-  background: var(--primary);
-  color: #fff;
+  background: rgba(255, 123, 84, 0.15);
+  color: var(--primary);
+  font-weight: 600;
 }
 .mini-btn.ghost {
-  background: var(--bg-card);
+  background: rgba(15, 23, 42, 0.05);
   color: var(--text-secondary);
-  border: 1px solid rgba(31, 41, 55, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+@media (max-width: 720px) {
+  .table-wrapper {
+    overflow-x: auto;
+  }
+  table {
+    min-width: 640px;
+  }
 }
 </style>

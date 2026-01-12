@@ -1,24 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --primary: #f48fb1;
-  --primary-hover: #f06292;
-  --secondary: #f48fb1;
-  --secondary-hover: #f06292;
-  --bg-page: #f9fafb;
-  --bg-card: #ffffff;
-  --bg-card-soft: #f4f5f7;
-  --text-primary: #1f2937;
-  --text-secondary: #4b5563;
-  --text-muted: rgba(31, 41, 55, 0.45);
+  --primary: #ff7b54;
+  --primary-hover: #ff9a76;
+  --secondary: #ffd166;
+  --secondary-hover: #fcbf49;
+  --bg-page: #fff6f1;
+  --bg-card: #fffdf9;
+  --bg-card-soft: #fff2e8;
+  --text-primary: #2b211a;
+  --text-secondary: rgba(43, 33, 26, 0.75);
+  --text-subtle: rgba(43, 33, 26, 0.55);
+  --text-muted: rgba(43, 33, 26, 0.45);
   --success: #10b981;
   --error: #ef4444;
-  --shadow-card: 0 25px 60px rgba(15, 23, 42, 0.12);
-  --shadow-soft: 0 12px 30px rgba(244, 143, 177, 0.35);
-  --radius-lg: 20px;
-  --radius-md: 14px;
+  --shadow-card: 0 35px 65px rgba(15, 23, 42, 0.18);
+  --shadow-soft: 0 25px 45px rgba(255, 123, 84, 0.35);
+  --page-gradient: linear-gradient(145deg, #fff6f1 0%, #ffe6da 50%, #fff6f1 100%);
+  --hero-card: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(255, 246, 241, 0.9));
+  --panel-card: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 230, 215, 0.9));
+  --status-card: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 242, 233, 0.85));
+  --practice-card-bg: linear-gradient(175deg, rgba(255, 255, 255, 0.95), rgba(255, 232, 220, 0.85));
+  --play-zone-bg: linear-gradient(160deg, rgba(255, 250, 246, 0.95), rgba(255, 223, 208, 0.85));
+  --word-card-bg: linear-gradient(140deg, rgba(255, 255, 255, 0.93), rgba(255, 234, 219, 0.9));
 }
 
 * {
@@ -28,8 +36,8 @@
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Poppins', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: var(--bg-page);
+  font-family: 'Space Grotesk', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--page-gradient);
   color: var(--text-primary);
 }
 

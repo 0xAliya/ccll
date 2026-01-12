@@ -1,12 +1,17 @@
 <template>
   <div class="app-shell">
     <header class="top-bar">
-      <div>
-        <p class="app-label">Spell & Spark</p>
+      <div class="hero-copy">
+        <p class="hero-pill">Spell & Spark</p>
         <h1>听力拼写练习</h1>
         <p class="app-sub">单一任务 · 极简 · 高专注</p>
+        <div class="hero-stats">
+          <span>听力 {{ wordsByMode.listening.length }} 条</span>
+          <span>默写 {{ wordsByMode.dictation.length }} 条</span>
+          <span>激活 {{ activeWords.length }} 条</span>
+        </div>
       </div>
-      <div class="top-actions">
+      <section class="control-card">
         <div class="source-input">
           <div class="source-input__meta">{{ practiceMode === 'listening' ? '听力词库链接' : '中文默写词库链接' }}</div>
           <div class="source-input__row">
@@ -26,36 +31,38 @@
             </button>
           </div>
         </div>
-        <button class="action-btn" :class="{ 'action-btn--muted': showList }" @click="showList = false">
-          练习
-        </button>
-        <button class="action-btn" :class="{ 'action-btn--muted': !showList }" @click="showList = true">
-          词库 {{ activeWords.length }}
-        </button>
-        <div class="mode-toggle">
-          <button
-            class="mode-btn"
-            :class="{ 'mode-btn--active': practiceMode === 'listening' }"
-            type="button"
-            :disabled="panelStatus.started"
-            @click="practiceMode = 'listening'"
-          >
-            听力拼写
-          </button>
-          <button
-            class="mode-btn"
-            :class="{ 'mode-btn--active': practiceMode === 'dictation' }"
-            type="button"
-            :disabled="panelStatus.started"
-            @click="practiceMode = 'dictation'"
-          >
-            中文默写
+        <div class="control-row">
+          <div class="chip-group">
+            <button class="action-btn" :class="{ 'action-btn--muted': showList }" @click="showList = false">练习</button>
+            <button class="action-btn" :class="{ 'action-btn--muted': !showList }" @click="showList = true">
+              词库 {{ activeWords.length }}
+            </button>
+          </div>
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ 'mode-btn--active': practiceMode === 'listening' }"
+              type="button"
+              :disabled="panelStatus.started"
+              @click="practiceMode = 'listening'"
+            >
+              听力拼写
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ 'mode-btn--active': practiceMode === 'dictation' }"
+              type="button"
+              :disabled="panelStatus.started"
+              @click="practiceMode = 'dictation'"
+            >
+              中文默写
+            </button>
+          </div>
+          <button class="action-btn action-btn--primary" @click="handleStart" :disabled="!hasWords">
+            {{ hasWords ? '开始练习' : activeWords.length ? '恢复可练单词' : '请先导入' }}
           </button>
         </div>
-        <button class="action-btn action-btn--primary" @click="handleStart" :disabled="!hasWords">
-          {{ hasWords ? '开始练习' : activeWords.length ? '恢复可练单词' : '请先导入' }}
-        </button>
-      </div>
+      </section>
     </header>
 
     <p v-if="activeImportError" class="inline-error">{{ activeImportError }}</p>
@@ -319,178 +326,237 @@ function handleWordProgress(payload: WordProgressPayload) {
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  background: var(--bg-page);
-  padding: 32px 16px 96px;
+  padding: 48px 24px 132px;
+  background: var(--page-gradient);
+  position: relative;
+  isolation: isolate;
+}
+.app-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 10% 15%, rgba(255, 255, 255, 0.4), transparent 60%),
+    radial-gradient(circle at 80% 0%, rgba(255, 182, 193, 0.25), transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(255, 192, 149, 0.18), transparent 50%);
+  z-index: -1;
 }
 .top-bar {
-  max-width: 960px;
-  margin: 0 auto 12px;
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  align-items: flex-end;
+  max-width: 1180px;
+  margin: 0 auto 36px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
+  align-items: stretch;
 }
-.app-label {
-  font-size: 10px;
-  letter-spacing: 0.4em;
+.hero-copy {
+  background: var(--hero-card);
+  border-radius: 30px;
+  padding: 36px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.hero-pill {
+  font-size: 11px;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 6px;
+  color: var(--text-subtle);
+  margin: 0 0 12px;
+  display: inline-block;
 }
-.top-bar h1 {
+.hero-copy h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 38px;
   color: var(--text-primary);
+  letter-spacing: -0.5px;
 }
 .app-sub {
-  margin: 6px 0 0;
+  margin: 8px 0 18px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 15px;
 }
-.top-actions {
+.hero-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  justify-content: flex-end;
+}
+.hero-stats span {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.control-card {
+  width: 100%;
+  background: var(--panel-card);
+  border-radius: 32px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow-card);
 }
 .source-input {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-width: 240px;
-  gap: 6px;
+  gap: 8px;
 }
 .source-input__meta {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
 }
 .source-input__row {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
 }
 .source-input__field {
   flex: 1;
-  min-width: 180px;
-  border-radius: 999px;
-  border: 1px solid rgba(31, 41, 55, 0.12);
+  min-width: 200px;
+  border-radius: 18px;
+  border: 1px solid rgba(53, 42, 33, 0.14);
   background: var(--bg-card);
-  padding: 10px 16px;
-  font-size: 14px;
+  padding: 14px 18px;
+  font-size: 15px;
   color: var(--text-primary);
+  transition: border-color 0.2s ease;
+}
+.source-input__field:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(255, 123, 84, 0.15);
+}
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+.chip-group {
+  display: inline-flex;
+  gap: 10px;
 }
 .action-btn {
   border-radius: 999px;
-  border: 1px solid rgba(31, 41, 55, 0.08);
+  border: 1px solid rgba(53, 42, 33, 0.2);
   background: var(--bg-card);
   color: var(--text-primary);
-  padding: 10px 18px;
+  padding: 12px 20px;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
 }
 .action-btn--ghost {
   border-style: dashed;
+  background: rgba(255, 255, 255, 0.65);
   color: var(--text-secondary);
 }
 .action-btn--primary {
   border: none;
-  background: var(--primary);
-  color: #fff;
+  background: linear-gradient(120deg, var(--primary), var(--primary-hover));
+  color: #fffdf9;
   box-shadow: var(--shadow-soft);
 }
 .action-btn--muted {
-  background: var(--bg-card-soft);
+  background: rgba(255, 255, 255, 0.6);
   color: var(--text-secondary);
 }
 .action-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 .mode-toggle {
-  display: flex;
-  border-radius: 999px;
-  border: 1px solid rgba(31, 41, 55, 0.08);
+  display: inline-flex;
+  border-radius: 18px;
+  border: 1px solid rgba(53, 42, 33, 0.14);
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.8);
 }
 .mode-btn {
   border: none;
   background: transparent;
-  padding: 10px 14px;
+  padding: 10px 18px;
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
+  font-weight: 600;
 }
 .mode-btn--active {
   background: var(--primary);
-  color: #fff;
-}
-.hidden-input {
-  display: none;
+  color: #fffdf9;
 }
 .inline-error {
-  max-width: 960px;
-  margin: 4px auto 0;
+  max-width: 1180px;
+  margin: 6px auto 0;
   font-size: 13px;
   color: var(--error);
 }
 .status-strip {
-  max-width: 720px;
-  margin: 24px auto;
-  background: var(--bg-card);
-  border-radius: 16px;
-  padding: 12px 20px;
+  max-width: 960px;
+  margin: 32px auto;
+  background: var(--status-card);
+  border-radius: 24px;
+  padding: 18px 26px;
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
-  border: 1px solid rgba(31, 41, 55, 0.08);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: var(--shadow-card);
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
 }
 .status-strip span:first-child {
   font-weight: 600;
   color: var(--text-primary);
 }
 .status-strip--inactive {
-  opacity: 0.7;
+  opacity: 0.75;
 }
 .main-area {
-  max-width: 720px;
+  max-width: 960px;
   margin: 0 auto;
 }
 .help-fab {
   position: fixed;
   right: 32px;
   bottom: 32px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
   border: none;
   background: var(--text-primary);
-  color: #fff;
+  color: #fffdf9;
   font-size: 20px;
   cursor: pointer;
-  box-shadow: 0 20px 40px rgba(31, 41, 55, 0.25);
+  box-shadow: 0 25px 45px rgba(10, 13, 25, 0.25);
 }
 .help-card {
   position: fixed;
   right: 32px;
-  bottom: 96px;
-  width: 220px;
+  bottom: 104px;
+  width: 230px;
   background: var(--bg-card);
-  border-radius: 18px;
-  padding: 16px 18px;
+  border-radius: 20px;
+  padding: 18px 20px;
   box-shadow: var(--shadow-card);
-  border: 1px solid rgba(31, 41, 55, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   font-size: 13px;
   color: var(--text-secondary);
 }
 .help-title {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 .help-card ul {
   list-style: none;
@@ -498,21 +564,33 @@ function handleWordProgress(payload: WordProgressPayload) {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .help-card li {
   line-height: 1.4;
 }
 @media (max-width: 768px) {
-  .top-bar {
-    flex-direction: column;
-    align-items: flex-start;
+  .app-shell {
+    padding: 28px 16px 120px;
   }
-  .top-actions {
+  .control-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chip-group,
+  .mode-toggle,
+  .action-btn {
     width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  .source-input__row {
+    flex-direction: column;
+    align-items: stretch;
   }
   .status-strip {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
   }
   .help-fab,
   .help-card {
