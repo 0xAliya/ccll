@@ -2,7 +2,7 @@
   <div class="practice-card">
     <div class="status-line">
       <div class="status-group">
-        <span class="status-label">🎧 听力拼写</span>
+        <span class="status-label">{{ mode.value === 'listening' ? '🎧 听力拼写' : '⌨️ 中文默写' }}</span>
         <span class="status-progress">
           {{ started ? `第 ${currentIndex + 1} / ${sessionWords.length}` : '等待开始' }}
         </span>
@@ -11,8 +11,8 @@
       <button
         class="icon-btn"
         type="button"
-        :disabled="!started || !currentWord"
-        title="Ctrl+P 重播"
+        :disabled="mode.value === 'dictation' || !started || !currentWord"
+        :title="mode.value === 'listening' ? 'Ctrl+P 重播' : '中文默写模式不支持重播'"
         @click="playCurrentWord"
       >
         🔁
@@ -20,15 +20,25 @@
     </div>
 
     <div class="play-zone" :class="{ 'play-zone--idle': !started }">
-      <button class="play-button" type="button" :disabled="!started" @click="playCurrentWord">
-        🔊
-      </button>
-      <p class="play-text">
-        {{ started ? 'Ctrl+P 可随时重播' : '导入并点击“开始练习”后自动播报单词' }}
-      </p>
+      <template v-if="mode.value === 'listening'">
+        <button class="play-button" type="button" :disabled="!started" @click="playCurrentWord">
+          🔊
+        </button>
+        <p class="play-text">
+          {{ started ? 'Ctrl+P 可随时重播' : '导入并点击“开始练习”后自动播报单词' }}
+        </p>
+      </template>
+      <template v-else>
+        <p class="dictation-prompt" v-if="started">
+          {{ currentWord?.meaning || '等待开始' }}
+        </p>
+        <p class="play-text">
+          {{ started ? '请根据中文释义输入对应英文，Enter 判分' : '开始后将展示中文释义' }}
+        </p>
+      </template>
     </div>
 
-    <label class="slider-row">
+    <label class="slider-row" v-if="mode.value === 'listening'">
       <span>语速 {{ speechRate.toFixed(1) }}x</span>
       <input type="range" min="0.5" max="2" step="0.1" v-model.number="speechRate" />
     </label>
@@ -37,13 +47,15 @@
       <input
         v-model="userInput"
         :disabled="!started || showResult"
-        placeholder="请输入听到的英文单词"
+        :placeholder="mode.value === 'listening' ? '请输入听到的英文单词' : '根据中文输入英文句子/单词'"
         ref="inputRef"
       />
       <button type="submit" class="sr-only">提交</button>
     </form>
 
-    <p class="shortcut-hint">Enter 提交 · Space 下一题 · Ctrl+P 重播 · Esc 重置</p>
+    <p class="shortcut-hint">
+      {{ mode.value === 'listening' ? 'Enter 提交 · Space 下一题 · Ctrl+P 重播 · Esc 重置' : 'Enter 提交 · Space 下一题 · Esc 重置' }}
+    </p>
 
     <div class="feedback" v-if="showResult">
       <p :class="isCorrect ? 'feedback-correct' : 'feedback-wrong'">{{ resultText }}</p>
@@ -58,7 +70,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import type { WordItem, WordProgressPayload } from '../types/word';
+import type { WordItem, WordProgressPayload, PracticeMode } from '../types/word';
 import { speak } from '../utils/speech';
 
 interface PanelStatusPayload {
@@ -71,6 +83,7 @@ interface PanelStatusPayload {
 interface Props {
   words: WordItem[];
   startSignal: number;
+  mode: PracticeMode;
 }
 const props = defineProps<Props>();
 const emit = defineEmits<{
@@ -78,6 +91,8 @@ const emit = defineEmits<{
   (e: 'status-change', value: PanelStatusPayload): void;
   (e: 'word-progress', value: WordProgressPayload): void;
 }>();
+
+const mode = computed(() => props.mode);
 
 const started = ref(false);
 const currentIndex = ref(0);
@@ -151,12 +166,14 @@ function startPractice() {
 }
 
 function playCurrentWord() {
+  if (mode.value === 'dictation') return;
   if (currentWord.value) {
     speak(currentWord.value.word, 'en-US', speechRate.value);
   }
 }
 
 function speakCurrent() {
+  if (mode.value === 'dictation') return;
   playCurrentWord();
 }
 
@@ -218,7 +235,7 @@ function focusInput() {
 
 function handleKeydown(e: KeyboardEvent) {
   if (!started.value) return;
-  if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
+  if (mode.value === 'listening' && e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
     // Ctrl+P: 播放
     e.preventDefault();
     playCurrentWord();
@@ -248,7 +265,7 @@ onBeforeUnmount(() => {
 
 watch(speechRate, () => {
   // 可选：语速变化时自动重播
-  if (started.value && currentWord.value) playCurrentWord();
+  if (mode.value === 'listening' && started.value && currentWord.value) playCurrentWord();
 });
 
 function shuffle<T>(source: T[]): T[] {
@@ -321,6 +338,11 @@ function shuffle<T>(source: T[]): T[] {
 }
 .play-zone--idle {
   opacity: 0.85;
+}
+.dictation-prompt {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 .play-button {
   width: 72px;

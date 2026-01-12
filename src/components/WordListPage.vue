@@ -2,9 +2,9 @@
   <div class="word-card">
     <div class="header-row">
       <div>
-        <p class="tagline">Word Garden</p>
+        <p class="tagline">Word Garden · {{ modeLabel }}</p>
         <h2>词库管理</h2>
-        <p class="count">目前共 {{ words.length }} 个小词宝</p>
+        <p class="count">当前 {{ modeLabel }} 词库共 {{ words.length }} 条</p>
       </div>
       <button @click="emit('close')" class="return-btn">返回练习</button>
     </div>
@@ -69,12 +69,13 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
-import type { WordItem } from '../types/word';
+import { ref, computed } from 'vue';
+import type { WordItem, PracticeMode } from '../types/word';
 import { normalizeWord } from '../utils/wordParser';
 
 interface Props {
   words: WordItem[];
+  mode: PracticeMode;
 }
 
 const props = defineProps<Props>();
@@ -83,6 +84,7 @@ const emit = defineEmits<{ (e: 'update:words', value: WordItem[]): void; (e: 'cl
 const newWord = ref('');
 const newMeaning = ref('');
 const addError = ref('');
+const modeLabel = computed(() => (props.mode === 'listening' ? '听力拼写' : '中文默写'));
 
 const canonical = (text: string) => normalizeWord(text).toLowerCase();
 

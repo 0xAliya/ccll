@@ -1,5 +1,7 @@
 export type WordTag = 'skip' | 'easy';
 
+export type PracticeMode = 'listening' | 'dictation';
+
 export interface WordItem {
   word: string;
   meaning: string;
