@@ -13,10 +13,6 @@
       <input v-model="newWord" placeholder="英文单词" />
       <input v-model="newMeaning" placeholder="中文释义" />
       <button type="submit">新增</button>
-      <label>
-        📂 导入
-        <input type="file" accept=".csv,.txt" class="hidden" @change="onFileChange" />
-      </label>
       <span v-if="addError" class="error-text">{{ addError }}</span>
     </form>
 
@@ -75,7 +71,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 import type { WordItem } from '../types/word';
-import { parseWordFile, normalizeWord } from '../utils/wordParser';
+import { normalizeWord } from '../utils/wordParser';
 
 interface Props {
   words: WordItem[];
@@ -129,36 +125,6 @@ function clearTag(item: WordItem) {
   updateWord(item, { tag: undefined });
 }
 
-function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = parseWordFile(reader.result as string, file.name);
-      if (!imported.length) {
-        addError.value = '文件中没有有效单词';
-        return;
-      }
-      const merged = [...props.words];
-      let count = 0;
-      for (const item of imported) {
-        const normalizedWord = normalizeWord(item.word);
-        const exists = merged.some(w => canonical(w.word) === normalizedWord.toLowerCase());
-        if (!exists) {
-          merged.push({ word: normalizedWord, meaning: item.meaning });
-          count++;
-        }
-      }
-      emit('update:words', merged);
-      addError.value = count ? '' : '导入内容均已存在';
-    } catch (error) {
-      addError.value = '导入失败，请检查文件格式';
-    }
-  };
-  reader.readAsText(file, 'utf-8');
-}
 </script>
 
 <style scoped>

@@ -7,10 +7,22 @@
         <p class="app-sub">单一任务 · 极简 · 高专注</p>
       </div>
       <div class="top-actions">
-        <label class="action-btn action-btn--ghost">
-          <span>导入词库</span>
-          <input type="file" accept=".csv,.txt" class="hidden-input" @change="onFileChange" />
-        </label>
+        <div class="source-input">
+          <input
+            v-model="wordSourceUrl"
+            class="source-input__field"
+            placeholder="请输入词库 TXT 链接"
+            @keyup.enter="loadWordsFromUrl()"
+          />
+          <button
+            type="button"
+            class="action-btn action-btn--ghost"
+            @click="loadWordsFromUrl()"
+            :disabled="isLoadingWords"
+          >
+            {{ isLoadingWords ? '加载中…' : '读取词库' }}
+          </button>
+        </div>
         <button class="action-btn" :class="{ 'action-btn--muted': showList }" @click="showList = false">
           练习
         </button>
@@ -69,7 +81,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import PracticePanel from './components/PracticePanel.vue';
 import WordListPage from './components/WordListPage.vue';
 import { parseWordFile, normalizeWord } from './utils/wordParser';
@@ -83,6 +95,14 @@ interface PanelStatus {
 }
 
 const STORAGE_KEY = 'ielts_word_list';
+const SOURCE_URL_KEY = 'ielts_word_source_url';
+
+function resolveDefaultWordUrl() {
+  const fallback = `${import.meta.env.BASE_URL}wordlist.txt`;
+  if (typeof window === 'undefined') return fallback;
+  const base = window.location.origin + import.meta.env.BASE_URL;
+  return new URL('wordlist.txt', base).toString();
+}
 
 function saveWordsToStorage(words: WordItem[]) {
   try {
@@ -119,30 +139,64 @@ const showList = ref(false);
 const startSignal = ref(0);
 const panelStatus = ref<PanelStatus>({ current: 0, total: 0, accuracy: 0, started: false });
 const helpVisible = ref(false);
+const defaultWordUrl = resolveDefaultWordUrl();
+let storedSourceUrl: string | null = null;
+try {
+  storedSourceUrl = localStorage.getItem(SOURCE_URL_KEY);
+} catch {}
+const wordSourceUrl = ref(storedSourceUrl ?? defaultWordUrl);
+if (!storedSourceUrl) {
+  try {
+    localStorage.setItem(SOURCE_URL_KEY, wordSourceUrl.value);
+  } catch {}
+}
+const isLoadingWords = ref(false);
+
+watch(wordSourceUrl, val => {
+  try {
+    localStorage.setItem(SOURCE_URL_KEY, val);
+  } catch {}
+});
 
 const hasWords = computed(() => words.value.some(w => w.tag !== 'skip'));
 
-function onFileChange(e: Event) {
+async function loadWordsFromUrl(auto = false) {
   importError.value = '';
-  const input = e.target as HTMLInputElement;
-  if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = parseWordFile(reader.result as string, file.name);
-      const sanitized = parsed.map(withDefaults);
+  const url = wordSourceUrl.value.trim();
+  if (!url) {
+    if (!auto) importError.value = '请填写词库链接';
+    return;
+  }
+  isLoadingWords.value = true;
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('request failed');
+    }
+    const text = await response.text();
+    const remoteName = url.toLowerCase().endsWith('.csv') ? 'remote.csv' : 'remote.txt';
+    const parsed = parseWordFile(text, remoteName);
+    const sanitized = parsed.map(withDefaults);
+    if (!sanitized.length) {
+      if (!auto) importError.value = '词库为空或格式错误';
+      words.value = [];
+      saveWordsToStorage([]);
+    } else {
       words.value = sanitized;
       saveWordsToStorage(sanitized);
-      if (!parsed.length) {
-        importError.value = '词库为空或格式错误';
-      }
-    } catch (err) {
-      importError.value = '解析失败，请检查文件格式';
     }
-  };
-  reader.readAsText(file, 'utf-8');
+  } catch (err) {
+    if (!auto) importError.value = '读取词库失败，请检查链接或网络';
+  } finally {
+    isLoadingWords.value = false;
+  }
 }
+
+onMounted(() => {
+  if (!words.value.length && wordSourceUrl.value.trim()) {
+    loadWordsFromUrl(true);
+  }
+});
 
 function handleStart() {
   if (!words.value.length) {
@@ -225,6 +279,23 @@ function handleWordProgress(payload: WordProgressPayload) {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+}
+.source-input {
+  display: flex;
+  flex: 1;
+  min-width: 240px;
+  gap: 8px;
+  align-items: center;
+}
+.source-input__field {
+  flex: 1;
+  min-width: 180px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 41, 55, 0.12);
+  background: var(--bg-card);
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 .action-btn {
   border-radius: 999px;

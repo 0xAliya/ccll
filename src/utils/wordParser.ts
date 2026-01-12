@@ -4,10 +4,11 @@ export function normalizeWord(text: string): string {
   return text.replace(/_/g, ' ').trim();
 }
 
-export function parseWordFile(content: string, filename: string): WordItem[] {
+export function parseWordFile(content: string, filename = 'remote.txt'): WordItem[] {
   let lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const words: WordItem[] = [];
-  if (filename.endsWith('.csv')) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith('.csv')) {
     // CSV: word,meaning
     lines = lines.filter(l => !/^word,?meaning$/i.test(l));
     for (const line of lines) {
@@ -16,7 +17,7 @@ export function parseWordFile(content: string, filename: string): WordItem[] {
         words.push({ word: normalizeWord(word), meaning: meaning.trim(), correctCount: 0 });
       }
     }
-  } else if (filename.endsWith('.txt')) {
+  } else {
     // TXT: word=meaning
     for (const line of lines) {
       const [word, meaning] = line.split('=');
