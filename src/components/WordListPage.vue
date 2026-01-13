@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="word-card">
     <div class="header-row">
       <div>
@@ -126,14 +126,13 @@ function toggleSkip(item: WordItem) {
 function clearTag(item: WordItem) {
   updateWord(item, { tag: undefined });
 }
-
 </script>
 
 <style scoped>
 .word-card {
   border-radius: 32px;
   background: var(--word-card-bg);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card);
   padding: 32px;
   display: flex;
@@ -166,11 +165,11 @@ function clearTag(item: WordItem) {
   border: none;
   border-radius: 999px;
   padding: 12px 22px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--chip-surface);
   color: var(--text-primary);
   cursor: pointer;
   font-weight: 600;
-  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
 }
 .form-row {
   display: flex;
@@ -182,9 +181,10 @@ function clearTag(item: WordItem) {
   flex: 1;
   min-width: 160px;
   border-radius: 18px;
-  border: 1px solid rgba(53, 42, 33, 0.14);
+  border: 1px solid var(--border-soft);
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--input-surface);
+  color: var(--text-primary);
 }
 .form-row button {
   border-radius: 18px;
@@ -192,8 +192,8 @@ function clearTag(item: WordItem) {
   padding: 12px 24px;
   font-size: 14px;
   cursor: pointer;
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-  color: #fffdf9;
+  background: var(--primary);
+  color: #fffefd;
   box-shadow: var(--shadow-soft);
   font-weight: 600;
 }
@@ -203,10 +203,10 @@ function clearTag(item: WordItem) {
 }
 .table-wrapper {
   border-radius: 26px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: var(--content-surface);
+  border: 1px solid var(--border-soft);
   overflow: hidden;
-  box-shadow: 0 30px 60px rgba(10, 13, 25, 0.08);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.18);
 }
 table {
   width: 100%;
@@ -214,7 +214,7 @@ table {
   font-size: 14px;
 }
 thead {
-  background: rgba(255, 142, 98, 0.08);
+  background: rgba(255, 142, 98, 0.12);
   color: var(--text-secondary);
 }
 th,
@@ -223,7 +223,7 @@ td {
   text-align: left;
 }
 tbody tr + tr {
-  border-top: 1px solid rgba(15, 23, 42, 0.05);
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
 }
 .empty-row {
   text-align: center;
@@ -269,14 +269,14 @@ tbody tr + tr {
   padding: 6px 14px;
   font-size: 12px;
   cursor: pointer;
-  background: rgba(255, 123, 84, 0.15);
+  background: rgba(255, 123, 84, 0.2);
   color: var(--primary);
   font-weight: 600;
 }
 .mini-btn.ghost {
   background: rgba(15, 23, 42, 0.05);
   color: var(--text-secondary);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--border-soft);
 }
 @media (max-width: 720px) {
   .table-wrapper {

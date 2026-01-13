@@ -1,61 +1,66 @@
 <template>
-  <div class="practice-card">
-    <div class="status-line">
-      <div class="status-group">
-        <span class="status-label">{{ mode.value === 'listening' ? '🎧 听力拼写' : '⌨️ 中文默写' }}</span>
-        <span class="status-progress">
-          {{ started ? `第 ${currentIndex + 1} / ${sessionWords.length}` : '等待开始' }}
-        </span>
+  <div class="practice-card" :class="{ 'practice-card--idle': !started }">
+    <div class="practice-header">
+      <div class="mode-flag">
+        <span class="mode-icon">{{ modeIcon }}</span>
+        <div class="mode-meta">
+          <p class="mode-title">{{ modeTitle }}</p>
+          <p class="session-progress">{{ sessionProgressText }}</p>
+        </div>
       </div>
-      <span class="status-accuracy">正确率 {{ accuracy }}%</span>
+      <div class="metrics">
+        <span class="metrics-text">正确率 {{ accuracy }}%</span>
+        <div class="progress-track">
+          <span class="progress-fill" :style="{ width: `${progressPercent}%` }"></span>
+        </div>
+      </div>
       <button
-        class="icon-btn"
+        v-if="started"
+        class="stop-btn"
         type="button"
-        :disabled="mode.value === 'dictation' || !started || !currentWord"
-        :title="mode.value === 'listening' ? 'Ctrl+P 重播' : '中文默写模式不支持重播'"
-        @click="playCurrentWord"
+        @click="resetPractice"
+        title="停止练习 (Esc)"
       >
-        🔁
+        ⏹
       </button>
     </div>
 
-    <div class="play-zone" :class="{ 'play-zone--idle': !started }">
-      <template v-if="mode.value === 'listening'">
-        <button class="play-button" type="button" :disabled="!started" @click="playCurrentWord">
-          🔊
-        </button>
-        <p class="play-text">
-          {{ started ? 'Ctrl+P 可随时重播' : '导入并点击“开始练习”后自动播报单词' }}
-        </p>
-      </template>
-      <template v-else>
-        <p class="dictation-prompt" v-if="started">
-          {{ currentWord?.meaning || '等待开始' }}
-        </p>
-        <p class="play-text">
-          {{ started ? '请根据中文释义输入对应英文，Enter 判分' : '开始后将展示中文释义' }}
-        </p>
-      </template>
+    <div class="practice-main">
+      <div class="prompt-stack">
+        <div class="playback-hint" :class="{ 'playback-hint--idle': !started }">
+          <button
+            v-if="mode === 'listening'"
+            class="playback-trigger"
+            type="button"
+            :disabled="!started"
+            @click="playCurrentWord"
+            title="播放单词 (Ctrl+P)"
+          >
+            🔊
+          </button>
+          <div class="playback-copy" v-if="mode === 'dictation' && started">
+            <p class="dictation-prompt">{{ dictationPrompt }}</p>
+          </div>
+        </div>
+      </div>
+
+      <form class="answer-form" @submit.prevent="submitSpelling">
+        <input
+          v-model="userInput"
+          class="answer-input"
+          :class="answerState"
+          :disabled="!started || showResult"
+          :placeholder="mode === 'listening' ? '请输入听到的英文单词' : '根据中文输入英文句子/单词'"
+          ref="inputRef"
+        />
+        <button type="submit" class="sr-only">提交</button>
+      </form>
     </div>
 
-    <label class="slider-row" v-if="mode.value === 'listening'">
+    <label class="slider-row" v-if="mode === 'listening' && started">
       <span>语速 {{ speechRate.toFixed(1) }}x</span>
       <input type="range" min="0.5" max="2" step="0.1" v-model.number="speechRate" />
     </label>
-
-    <form class="answer-form" @submit.prevent="submitSpelling">
-      <input
-        v-model="userInput"
-        :disabled="!started || showResult"
-        :placeholder="mode.value === 'listening' ? '请输入听到的英文单词' : '根据中文输入英文句子/单词'"
-        ref="inputRef"
-      />
-      <button type="submit" class="sr-only">提交</button>
-    </form>
-
-    <p class="shortcut-hint">
-      {{ mode.value === 'listening' ? 'Enter 提交 · Space 下一题 · Ctrl+P 重播 · Esc 重置' : 'Enter 提交 · Space 下一题 · Esc 重置' }}
-    </p>
 
     <div class="feedback" v-if="showResult">
       <p :class="isCorrect ? 'feedback-correct' : 'feedback-wrong'">{{ resultText }}</p>
@@ -64,7 +69,6 @@
         <p class="meaning-translation">{{ currentWord?.meaning }}</p>
       </div>
     </div>
-    <p v-else class="feedback-placeholder">输入后按 Enter 即可判分</p>
   </div>
 </template>
 
@@ -112,6 +116,33 @@ const accuracy = computed(() =>
     : 0
 );
 const currentWord = computed(() => sessionWords.value[currentIndex.value]);
+const modeIcon = computed(() => (mode.value === 'listening' ? '🎧' : '⌨️'));
+const modeTitle = computed(() => (mode.value === 'listening' ? '听力拼写' : '中文默写'));
+const sessionProgressText = computed(() =>
+  started.value ? `第 ${currentIndex.value + 1} / ${sessionWords.value.length}` : '等待开始'
+);
+
+const dictationPrompt = computed(() => {
+  if (mode.value !== 'dictation') return '';
+  if (started.value && currentWord.value?.meaning) {
+    return currentWord.value.meaning;
+  }
+  const preview = props.words.find(w => w.tag !== 'skip');
+  return preview?.meaning || '等待开始';
+});
+const dictationPromptTitle = computed(() =>
+  started.value ? '当前中文释义' : '预览中文释义'
+);
+const progressPercent = computed(() => {
+  const total = sessionWords.value.length;
+  if (!total || !started.value) return 0;
+  const completed = Math.min(currentIndex.value + (showResult.value ? 1 : 0), total);
+  return Math.round((completed / total) * 100);
+});
+const answerState = computed(() => {
+  if (!showResult.value) return '';
+  return isCorrect.value ? 'answer-input--correct' : 'answer-input--wrong';
+});
 
 function pushStatus() {
   emit('status-change', {
@@ -280,148 +311,235 @@ function shuffle<T>(source: T[]): T[] {
 
 <style scoped>
 .practice-card {
-  border-radius: 34px;
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85)),
-    var(--practice-card-bg);
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 28px;
+  background: var(--practice-card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: var(--shadow-card);
-  padding: 36px;
+  padding: 28px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  position: relative;
+  gap: 20px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.practice-card--idle {
+  opacity: 0.9;
+}
+.practice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.mode-flag {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mode-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--chip-surface);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.mode-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mode-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.session-progress {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.metrics-text {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.stop-btn {
+  border: 1px solid var(--border-soft);
+  background: var(--chip-surface);
+  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+.stop-btn:hover {
+  transform: translateY(-1px);
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+.progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
-.practice-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 85% 20%, rgba(255, 162, 135, 0.25), transparent 40%);
-  z-index: 0;
+.progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.3s ease;
 }
-.practice-card > * {
-  position: relative;
-  z-index: 1;
-}
-.status-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  font-size: 15px;
-  color: var(--text-secondary);
-}
-.status-group {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-}
-.status-label {
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.04em;
-}
-.status-progress {
-  color: var(--text-secondary);
-}
-.status-accuracy {
-  margin-left: auto;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.icon-btn {
-  border: none;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  font-size: 18px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
-}
-.icon-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-.play-zone {
-  border-radius: 28px;
-  padding: 32px;
-  width: 100%;
-  background: var(--play-zone-bg);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+.practice-main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  text-align: center;
-  box-shadow: 0 25px 45px rgba(15, 23, 42, 0.1);
+  gap: 18px;
+  margin-top: 0;
 }
-.play-zone--idle {
-  opacity: 0.85;
+.prompt-stack {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.playback-hint {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+}
+.playback-hint--idle {
+  opacity: 0.7;
+}
+.playback-trigger {
+  border: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: var(--primary);
+  color: #0b0e14;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 16px 40px rgba(255, 143, 79, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.playback-trigger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 50px rgba(255, 143, 79, 0.4);
+}
+.playback-trigger:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.playback-copy {
+  display: flex;
+  flex-direction: column;
 }
 .dictation-prompt {
-  font-size: 22px;
+  margin: 0;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
 }
-.play-button {
-  width: 84px;
-  height: 84px;
-  border-radius: 32px;
-  border: none;
-  background: linear-gradient(140deg, var(--primary), var(--primary-hover));
-  color: #fffdf9;
-  font-size: 30px;
-  cursor: pointer;
-  box-shadow: 0 35px 45px rgba(255, 123, 84, 0.35);
+.dictation-panel {
+  margin-top: -8px;
+  border-radius: 28px;
+  border: 1px solid var(--border-strong);
+  background: var(--content-surface);
+  padding: 20px 26px;
+  box-shadow: var(--shadow-soft, 0 18px 50px rgba(0, 0, 0, 0.35));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.play-button:disabled {
-  background: rgba(255, 255, 255, 0.6);
+.dictation-panel__label {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   color: var(--text-muted);
-  box-shadow: none;
-  cursor: not-allowed;
 }
-.play-text {
-  font-size: 14px;
-  color: var(--text-secondary);
+.dictation-panel__text {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.answer-form {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  max-width: 960px;
+}
+.answer-input {
+  width: 100%;
+  border-radius: 24px;
+  border: 1px solid var(--border-soft);
+  padding: 20px 28px;
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: 600;
+  background: var(--input-surface);
+  color: var(--text-primary);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.04), 0 30px 60px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.answer-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 35px rgba(255, 143, 79, 0.35);
+}
+.answer-input:disabled {
+  opacity: 0.6;
+}
+.answer-input--correct {
+  border-color: var(--success);
+  box-shadow: 0 0 35px rgba(16, 185, 129, 0.35);
+  animation: glowPulse 0.6s ease;
+}
+.answer-input--wrong {
+  border-color: var(--error);
+  animation: shake 0.4s ease;
 }
 .slider-row {
   display: flex;
   align-items: center;
-  gap: 18px;
-  font-size: 13px;
+  gap: 14px;
+  font-size: 12px;
   color: var(--text-secondary);
+  background: var(--chip-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  padding: 10px 16px;
 }
 .slider-row input {
   flex: 1;
   accent-color: var(--primary);
 }
-.answer-form input {
-  width: 100%;
-  border-radius: 28px;
-  border: 1px solid rgba(53, 42, 33, 0.14);
-  padding: 24px 30px;
-  font-size: clamp(22px, 5vw, 30px);
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--text-primary);
-  box-shadow: 0 35px 55px rgba(10, 13, 25, 0.12);
-}
-.answer-form input:disabled {
-  opacity: 0.7;
-}
-.shortcut-hint {
+.feedback {
   text-align: center;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.feedback,
-.feedback-placeholder {
-  text-align: center;
-  font-size: 16px;
+  font-size: 15px;
 }
 .feedback-correct {
   color: var(--success);
@@ -432,27 +550,24 @@ function shuffle<T>(source: T[]): T[] {
   font-weight: 700;
 }
 .feedback-meaning {
-  margin-top: 18px;
-  padding: 18px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.85);
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--chip-surface);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border-soft);
 }
 .meaning-word {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 .meaning-translation {
-  font-size: 18px;
-  color: var(--text-secondary);
-}
-.feedback-placeholder {
+  font-size: 16px;
   color: var(--text-secondary);
 }
 .sr-only {
@@ -465,16 +580,53 @@ function shuffle<T>(source: T[]): T[] {
   clip: rect(0 0 0 0);
   border: 0;
 }
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(16, 185, 129, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(16, 185, 129, 0.1);
+  }
+}
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+}
 @media (max-width: 640px) {
   .practice-card {
-    padding: 26px;
+    padding: 20px;
   }
-  .status-line {
+  .practice-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
   }
-  .status-accuracy {
-    margin-left: 0;
+  .mode-flag {
+    width: 100%;
+  }
+  .practice-main {
+    gap: 14px;
+  }
+  .metrics {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .answer-input {
+    padding: 16px 20px;
   }
 }
 </style>

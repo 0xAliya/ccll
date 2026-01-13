@@ -1,102 +1,88 @@
 <template>
   <div class="app-shell">
-    <header class="top-bar">
-      <div class="hero-copy">
-        <p class="hero-pill">Spell & Spark</p>
-        <h1>听力拼写练习</h1>
-        <p class="app-sub">单一任务 · 极简 · 高专注</p>
-        <div class="hero-stats">
-          <span>听力 {{ wordsByMode.listening.length }} 条</span>
-          <span>默写 {{ wordsByMode.dictation.length }} 条</span>
-          <span>激活 {{ activeWords.length }} 条</span>
-        </div>
-      </div>
-      <section class="control-card">
-        <div class="source-input">
-          <div class="source-input__meta">{{ practiceMode === 'listening' ? '听力词库链接' : '中文默写词库链接' }}</div>
-          <div class="source-input__row">
-            <input
-              v-model="wordSourceUrl[practiceMode]"
-              class="source-input__field"
-              placeholder="请输入词库 TXT 链接"
-              @keyup.enter="loadWordsFromUrl(practiceMode)"
-            />
-            <button
-              type="button"
-              class="action-btn action-btn--ghost"
-              @click="loadWordsFromUrl(practiceMode)"
-              :disabled="isLoadingWords[practiceMode]"
-            >
-              {{ isLoadingWords[practiceMode] ? '加载中…' : '读取词库' }}
-            </button>
-          </div>
-        </div>
-        <div class="control-row">
-          <div class="chip-group">
-            <button class="action-btn" :class="{ 'action-btn--muted': showList }" @click="showList = false">练习</button>
-            <button class="action-btn" :class="{ 'action-btn--muted': !showList }" @click="showList = true">
-              词库 {{ activeWords.length }}
-            </button>
-          </div>
-          <div class="mode-toggle">
-            <button
-              class="mode-btn"
-              :class="{ 'mode-btn--active': practiceMode === 'listening' }"
-              type="button"
-              :disabled="panelStatus.started"
-              @click="practiceMode = 'listening'"
-            >
-              听力拼写
-            </button>
-            <button
-              class="mode-btn"
-              :class="{ 'mode-btn--active': practiceMode === 'dictation' }"
-              type="button"
-              :disabled="panelStatus.started"
-              @click="practiceMode = 'dictation'"
-            >
-              中文默写
-            </button>
-          </div>
-          <button class="action-btn action-btn--primary" @click="handleStart" :disabled="!hasWords">
-            {{ hasWords ? '开始练习' : activeWords.length ? '恢复可练单词' : '请先导入' }}
+    <div class="masthead">
+      <span class="hero-badge">Spell & Spark · 听力拼写练习</span>
+      <button type="button" class="theme-toggle" @click="theme = theme === 'dark' ? 'light' : 'dark'"
+        :title="theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'">
+        {{ theme === 'dark' ? '🌙' : '☀️' }}
+      </button>
+    </div>
+    <div class="control-panel">
+      <div class="control-row control-row--modes">
+        <div class="mode-toggle" role="group" aria-label="练习模式">
+          <button class="mode-btn" :class="{ 'mode-btn--active': practiceMode === 'listening' }" type="button"
+            :disabled="panelStatus.started" @click="practiceMode = 'listening'">
+            听写
+          </button>
+          <button class="mode-btn" :class="{ 'mode-btn--active': practiceMode === 'dictation' }" type="button"
+            :disabled="panelStatus.started" @click="practiceMode = 'dictation'">
+            默写
           </button>
         </div>
-      </section>
-    </header>
+      </div>
+
+      <div class="source-input">
+        <div class="source-input__wrapper">
+          <input v-model="newBankUrl" class="source-input__field" placeholder="输入词库链接并导入"
+            @keyup.enter="importNewBank" />
+          <div class="source-input__actions">
+            <input
+              v-model="newBankName"
+              class="input-field input-field--name"
+              placeholder="词库名称"
+              maxlength="20"
+            />
+            <button type="button" class="input-btn input-btn--text" @click="importNewBank"
+              :disabled="isLoadingWords[practiceMode]">
+              {{ isLoadingWords[practiceMode] ? '导入中…' : '导入' }}
+            </button>
+            <button class="input-btn input-btn--badge" :class="{ 'input-btn--active': showList }"
+              @click="showList = true">
+              词库 {{ activeWords.length }} →
+            </button>
+          </div>
+        </div>
+        
+      <div class="wordbank-selector" v-if="wordBanks[practiceMode].length > 0">
+        <div class="wordbank-list">
+          <button
+            v-for="bank in wordBanks[practiceMode]"
+            :key="bank.id"
+            class="wordbank-item"
+            :class="{ 'wordbank-item--active': selectedBankId[practiceMode] === bank.id }"
+            @click="selectWordBank(bank.id)"
+            :disabled="panelStatus.started"
+          >
+            <span class="wordbank-name">{{ bank.name }}</span>
+            <span class="wordbank-count">{{ bank.words.filter(w => w.tag !== 'skip').length }}</span>
+            <button
+              class="wordbank-delete"
+              @click.stop="deleteWordBank(bank.id)"
+              :disabled="panelStatus.started"
+              title="删除词库"
+            >
+              ×
+            </button>
+          </button>
+        </div>
+      </div>
+
+      </div>
+
+      <div class="control-row control-row--actions">
+        <button class="action-btn action-btn--primary action-btn--hero" @click="handleStart" :disabled="!hasWords">
+          {{ hasWords ? '开始练习' : activeWords.length ? '恢复可练单词' : '请先导入' }}
+        </button>
+      </div>
+    </div>
 
     <p v-if="activeImportError" class="inline-error">{{ activeImportError }}</p>
 
-    <div class="status-strip" :class="{ 'status-strip--inactive': showList }">
-      <span>{{ statusMode === 'listening' ? '🎧 听力拼写' : '⌨️ 中文默写' }}</span>
-      <template v-if="showList">
-        <span>听力 {{ wordsByMode.listening.length }} 条 · 默写 {{ wordsByMode.dictation.length }} 条</span>
-      </template>
-      <template v-else>
-        <span>
-          {{ panelStatus.started ? `第 ${panelStatus.current} / ${panelStatus.total || sessionWords.length}` : '等待开始' }}
-        </span>
-        <span>正确率 {{ panelStatus.accuracy }}%</span>
-      </template>
-    </div>
-
     <main class="main-area">
-      <PracticePanel
-        v-if="!showList"
-        :words="sessionWords"
-        :start-signal="startSignal"
-        :mode="statusMode"
-        @completed="handlePracticeComplete"
-        @status-change="handleStatusChange"
-        @word-progress="handleWordProgress"
-      />
-      <WordListPage
-        v-else
-        :words="activeWords"
-        :mode="practiceMode"
-        @update:words="handleActiveWordsUpdate"
-        @close="showList = false"
-      />
+      <PracticePanel v-if="!showList" :words="sessionWords" :start-signal="startSignal" :mode="statusMode"
+        @completed="handlePracticeComplete" @status-change="handleStatusChange" @word-progress="handleWordProgress" />
+      <WordListPage v-else :words="activeWords" :mode="practiceMode" @update:words="handleActiveWordsUpdate"
+        @close="showList = false" />
     </main>
 
     <button class="help-fab" type="button" @click="helpVisible = !helpVisible">?</button>
@@ -126,42 +112,58 @@ interface PanelStatus {
   started: boolean;
 }
 
+interface WordBank {
+  id: string;
+  name: string;
+  words: WordItem[];
+  url: string;
+}
+
+type ThemeMode = 'dark' | 'light';
+
 const MODES: PracticeMode[] = ['listening', 'dictation'];
-const STORAGE_KEY_PREFIX = 'ielts_word_list';
-const SOURCE_URL_KEY_PREFIX = 'ielts_word_source_url';
+const WORD_BANKS_KEY = 'ielts_word_banks_v2';
+const SELECTED_BANK_KEY = 'ielts_selected_bank';
+const THEME_KEY = 'ielts_theme_mode';
 
-function storageKey(mode: PracticeMode) {
-  return `${STORAGE_KEY_PREFIX}_${mode}`;
-}
-function sourceKey(mode: PracticeMode) {
-  return `${SOURCE_URL_KEY_PREFIX}_${mode}`;
-}
-function resolveDefaultWordUrl(mode: PracticeMode) {
-  const filename = mode === 'listening' ? 'wordlist.txt' : 'dictation.txt';
-  const fallback = `${import.meta.env.BASE_URL}${filename}`;
-  if (typeof window === 'undefined') return fallback;
-  const base = window.location.origin + import.meta.env.BASE_URL;
-  return new URL(filename, base).toString();
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-function saveWordsToStorage(mode: PracticeMode, words: WordItem[]) {
+function loadWordBanks(): Record<PracticeMode, WordBank[]> {
   try {
-    localStorage.setItem(storageKey(mode), JSON.stringify(words));
-  } catch {}
-}
-function loadWordsFromStorage(mode: PracticeMode): WordItem[] {
-  try {
-    const raw = localStorage.getItem(storageKey(mode));
+    const raw = localStorage.getItem(WORD_BANKS_KEY);
     if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        return arr
-          .filter((w: any) => typeof w.word === 'string' && typeof w.meaning === 'string')
-          .map((w: WordItem) => ({ ...w, word: normalizeWord(w.word) }));
-      }
+      const data = JSON.parse(raw);
+      return {
+        listening: Array.isArray(data.listening) ? data.listening : [],
+        dictation: Array.isArray(data.dictation) ? data.dictation : [],
+      };
     }
-  } catch {}
-  return [];
+  } catch { }
+  return { listening: [], dictation: [] };
+}
+
+function saveWordBanks(banks: Record<PracticeMode, WordBank[]>) {
+  try {
+    localStorage.setItem(WORD_BANKS_KEY, JSON.stringify(banks));
+  } catch { }
+}
+
+function loadSelectedBankId(): Record<PracticeMode, string | null> {
+  try {
+    const raw = localStorage.getItem(SELECTED_BANK_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch { }
+  return { listening: null, dictation: null };
+}
+
+function saveSelectedBankId(ids: Record<PracticeMode, string | null>) {
+  try {
+    localStorage.setItem(SELECTED_BANK_KEY, JSON.stringify(ids));
+  } catch { }
 }
 
 function withDefaults(word: WordItem): WordItem {
@@ -173,66 +175,74 @@ function withDefaults(word: WordItem): WordItem {
   };
 }
 
-const wordsByMode = reactive<Record<PracticeMode, WordItem[]>>({
-  listening: loadWordsFromStorage('listening').map(withDefaults),
-  dictation: loadWordsFromStorage('dictation').map(withDefaults),
-});
+const wordBanks = reactive<Record<PracticeMode, WordBank[]>>(loadWordBanks());
+const selectedBankId = reactive<Record<PracticeMode, string | null>>(loadSelectedBankId());
 const importErrors = reactive<Record<PracticeMode, string>>({ listening: '', dictation: '' });
 const isLoadingWords = reactive<Record<PracticeMode, boolean>>({ listening: false, dictation: false });
 
+const newBankUrl = ref('');
+const newBankName = ref('');
 const startSignal = ref(0);
 const panelStatus = ref<PanelStatus>({ current: 0, total: 0, accuracy: 0, started: false });
 const helpVisible = ref(false);
 const showList = ref(false);
 const practiceMode = ref<PracticeMode>('listening');
 const sessionMode = ref<PracticeMode>('listening');
+const theme = ref<ThemeMode>('dark');
 
-const initialSources: Record<PracticeMode, string | null> = {
-  listening: null,
-  dictation: null,
-};
-for (const mode of MODES) {
+function applyThemeClass(value: ThemeMode) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.remove('theme-dark', 'theme-light');
+  root.classList.add(`theme-${value}`);
+}
+
+if (typeof window !== 'undefined') {
   try {
-    initialSources[mode] = localStorage.getItem(sourceKey(mode));
-  } catch {
-    initialSources[mode] = null;
+    const storedTheme = localStorage.getItem(THEME_KEY) as ThemeMode | null;
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      theme.value = storedTheme;
+    }
+  } catch { }
+}
+
+watch(
+  theme,
+  value => {
+    applyThemeClass(value);
+    try {
+      localStorage.setItem(THEME_KEY, value);
+    } catch { }
+  },
+  { immediate: true }
+);
+
+// 自动选择第一个词库
+for (const mode of MODES) {
+  if (!selectedBankId[mode] && wordBanks[mode].length > 0) {
+    selectedBankId[mode] = wordBanks[mode][0].id;
   }
 }
 
-const wordSourceUrl = reactive<Record<PracticeMode, string>>({
-  listening: initialSources.listening ?? resolveDefaultWordUrl('listening'),
-  dictation: initialSources.dictation ?? resolveDefaultWordUrl('dictation'),
+const activeWords = computed(() => {
+  const mode = practiceMode.value;
+  const bankId = selectedBankId[mode];
+  if (!bankId) return [];
+  const bank = wordBanks[mode].find(b => b.id === bankId);
+  return bank ? bank.words : [];
 });
 
-function persistSourceUrl(mode: PracticeMode, value: string) {
-  try {
-    localStorage.setItem(sourceKey(mode), value);
-  } catch {}
-}
+const sessionWords = computed(() => {
+  const mode = sessionMode.value;
+  const bankId = selectedBankId[mode];
+  if (!bankId) return [];
+  const bank = wordBanks[mode].find(b => b.id === bankId);
+  return bank ? bank.words : [];
+});
 
-for (const mode of MODES) {
-  if (!initialSources[mode]) {
-    persistSourceUrl(mode, wordSourceUrl[mode]);
-  }
-  watch(
-    () => wordSourceUrl[mode],
-    val => persistSourceUrl(mode, val)
-  );
-}
-
-const activeWords = computed(() => wordsByMode[practiceMode.value]);
-const sessionWords = computed(() => wordsByMode[sessionMode.value]);
 const activeImportError = computed(() => importErrors[practiceMode.value]);
 const hasWords = computed(() => activeWords.value.some(w => w.tag !== 'skip'));
 const statusMode = computed<PracticeMode>(() => (panelStatus.value.started ? sessionMode.value : practiceMode.value));
-
-onMounted(() => {
-  for (const mode of MODES) {
-    if (!wordsByMode[mode].length && wordSourceUrl[mode].trim()) {
-      loadWordsFromUrl(mode, true);
-    }
-  }
-});
 
 watch(practiceMode, newMode => {
   if (!panelStatus.value.started) {
@@ -240,14 +250,41 @@ watch(practiceMode, newMode => {
   }
 });
 
-async function loadWordsFromUrl(mode: PracticeMode, auto = false) {
+watch(wordBanks, () => {
+  saveWordBanks(wordBanks);
+}, { deep: true });
+
+watch(selectedBankId, () => {
+  saveSelectedBankId(selectedBankId);
+}, { deep: true });
+
+function selectWordBank(bankId: string) {
+  selectedBankId[practiceMode.value] = bankId;
+}
+
+function deleteWordBank(bankId: string) {
+  const mode = practiceMode.value;
+  const index = wordBanks[mode].findIndex(b => b.id === bankId);
+  if (index !== -1) {
+    wordBanks[mode].splice(index, 1);
+    if (selectedBankId[mode] === bankId) {
+      selectedBankId[mode] = wordBanks[mode].length > 0 ? wordBanks[mode][0].id : null;
+    }
+  }
+}
+
+async function importNewBank() {
+  const mode = practiceMode.value;
   importErrors[mode] = '';
-  const url = wordSourceUrl[mode].trim();
+  const url = newBankUrl.value.trim();
   if (!url) {
-    if (!auto) importErrors[mode] = '请填写词库链接';
+    importErrors[mode] = '请填写词库链接';
     return;
   }
+  
+  const name = newBankName.value.trim() || `词库 ${wordBanks[mode].length + 1}`;
   isLoadingWords[mode] = true;
+  
   try {
     const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) {
@@ -257,16 +294,23 @@ async function loadWordsFromUrl(mode: PracticeMode, auto = false) {
     const remoteName = url.toLowerCase().endsWith('.csv') ? 'remote.csv' : 'remote.txt';
     const parsed = parseWordFile(text, remoteName);
     const sanitized = parsed.map(withDefaults);
+    
     if (!sanitized.length) {
-      if (!auto) importErrors[mode] = '词库为空或格式错误';
-      wordsByMode[mode] = [];
-      saveWordsToStorage(mode, []);
+      importErrors[mode] = '词库为空或格式错误';
     } else {
-      wordsByMode[mode] = sanitized;
-      saveWordsToStorage(mode, sanitized);
+      const newBank: WordBank = {
+        id: generateId(),
+        name,
+        words: sanitized,
+        url,
+      };
+      wordBanks[mode].push(newBank);
+      selectedBankId[mode] = newBank.id;
+      newBankUrl.value = '';
+      newBankName.value = '';
     }
   } catch (err) {
-    if (!auto) importErrors[mode] = '读取词库失败，请检查链接或网络';
+    importErrors[mode] = '读取词库失败，请检查链接或网络';
   } finally {
     isLoadingWords[mode] = false;
   }
@@ -290,14 +334,15 @@ function handlePracticeComplete() {
   // 保留面板，方便再次开始
 }
 
-function handleWordsUpdate(mode: PracticeMode, newWords: WordItem[]) {
-  const sanitized = newWords.map(withDefaults);
-  wordsByMode[mode] = sanitized;
-  saveWordsToStorage(mode, sanitized);
-}
-
 function handleActiveWordsUpdate(newWords: WordItem[]) {
-  handleWordsUpdate(practiceMode.value, newWords);
+  const mode = practiceMode.value;
+  const bankId = selectedBankId[mode];
+  if (!bankId) return;
+  
+  const bank = wordBanks[mode].find(b => b.id === bankId);
+  if (bank) {
+    bank.words = newWords.map(withDefaults);
+  }
 }
 
 function handleStatusChange(payload: PanelStatus) {
@@ -306,8 +351,14 @@ function handleStatusChange(payload: PanelStatus) {
 
 function handleWordProgress(payload: WordProgressPayload) {
   const currentMode = sessionMode.value;
+  const bankId = selectedBankId[currentMode];
+  if (!bankId) return;
+  
+  const bank = wordBanks[currentMode].find(b => b.id === bankId);
+  if (!bank) return;
+  
   let changed = false;
-  const updated = wordsByMode[currentMode].map(item => {
+  const updated = bank.words.map(item => {
     if (normalizeWord(item.word).toLowerCase() === normalizeWord(payload.word).toLowerCase()) {
       changed = true;
       const isMastered = payload.correctCount >= 5;
@@ -317,8 +368,7 @@ function handleWordProgress(payload: WordProgressPayload) {
     return item;
   });
   if (changed) {
-    wordsByMode[currentMode] = updated;
-    saveWordsToStorage(currentMode, updated);
+    bank.words = updated;
   }
 }
 </script>
@@ -326,205 +376,345 @@ function handleWordProgress(payload: WordProgressPayload) {
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  padding: 48px 24px 132px;
-  background: var(--page-gradient);
-  position: relative;
-  isolation: isolate;
+  padding: 56px 32px 140px;
+  background: var(--bg-page);
+  background-image: radial-gradient(circle at 20% 20%, rgba(255, 138, 63, 0.12), transparent 45%),
+    radial-gradient(circle at 80% 0%, rgba(124, 168, 255, 0.12), transparent 50%),
+    var(--page-gradient);
 }
-.app-shell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 10% 15%, rgba(255, 255, 255, 0.4), transparent 60%),
-    radial-gradient(circle at 80% 0%, rgba(255, 182, 193, 0.25), transparent 45%),
-    radial-gradient(circle at 50% 80%, rgba(255, 192, 149, 0.18), transparent 50%);
-  z-index: -1;
-}
-.top-bar {
-  max-width: 1180px;
-  margin: 0 auto 36px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 32px;
-  align-items: stretch;
-}
-.hero-copy {
-  background: var(--hero-card);
-  border-radius: 30px;
-  padding: 36px;
-  box-shadow: var(--shadow-card);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-}
-.hero-pill {
-  font-size: 11px;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-  margin: 0 0 12px;
-  display: inline-block;
-}
-.hero-copy h1 {
-  margin: 0;
-  font-size: 38px;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-}
-.app-sub {
-  margin: 8px 0 18px;
-  color: var(--text-secondary);
-  font-size: 15px;
-}
-.hero-stats {
+
+.masthead {
+  max-width: 1080px;
+  margin: 0 auto 16px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.hero-stats span {
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  font-size: 13px;
+
+.hero-badge {
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: 0.04em;
 }
-.control-card {
-  width: 100%;
-  background: var(--panel-card);
-  border-radius: 32px;
-  padding: 28px;
+
+.control-panel {
+  margin: 12px auto;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: var(--shadow-card);
+  max-width: 960px;
 }
+
+.control-row {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-row--modes {
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
+.control-row--actions {
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
 .source-input {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
+
 .source-input__meta {
   font-size: 12px;
   color: var(--text-subtle);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
 }
-.source-input__row {
+
+.source-input__wrapper {
+  position: relative;
   display: flex;
-  gap: 12px;
   align-items: center;
+  border-radius: 20px;
+  background: var(--input-surface);
+  min-width: 550px;
+
 }
+
+.source-input__wrapper:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 12px rgba(255, 123, 156, 0.35);
+}
+
 .source-input__field {
   flex: 1;
-  min-width: 200px;
-  border-radius: 18px;
-  border: 1px solid rgba(53, 42, 33, 0.14);
-  background: var(--bg-card);
-  padding: 14px 18px;
+  border: none;
+  background: transparent;
+  padding: 16px 20px;
   font-size: 15px;
   color: var(--text-primary);
-  transition: border-color 0.2s ease;
-}
-.source-input__field:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(255, 123, 84, 0.15);
 }
-.control-row {
+
+.source-input__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  flex-shrink: 0;
+}
+
+.input-field {
+  border: none;
+  background: var(--chip-surface);
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  border-radius: 10px;
+  outline: none;
+  transition: background 0.2s ease;
+}
+
+.input-field:focus {
+  background: var(--input-surface);
+}
+
+.input-field--name {
+  width: 100px;
+}
+
+.wordbank-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.wordbank-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
+  gap: 8px;
 }
+
+.wordbank-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: var(--chip-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wordbank-item:hover:not(:disabled) {
+  background: var(--input-surface);
+  border-color: var(--primary);
+}
+
+.wordbank-item--active {
+  background: var(--primary);
+  color: #fffefd;
+  border-color: var(--primary);
+}
+
+.wordbank-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wordbank-name {
+  font-weight: 600;
+}
+
+.wordbank-count {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.wordbank-delete {
+  border: none;
+  background: transparent;
+  color: currentColor;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.wordbank-delete:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.wordbank-delete:disabled {
+  cursor: not-allowed;
+}
+
+.input-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 12px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.input-btn:hover:not(:disabled) {
+  background: var(--chip-surface);
+  color: var(--text-primary);
+}
+
+.input-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-btn--text {
+  color: var(--text-subtle);
+}
+
+.input-btn--badge {
+  color: var(--text-secondary);
+}
+
+.input-btn--active {
+  background: var(--primary);
+  color: #fffefd;
+}
+
+.input-btn--active:hover {
+  background: var(--primary);
+  color: #fffefd;
+}
+
 .chip-group {
   display: inline-flex;
-  gap: 10px;
+  gap: 12px;
 }
+
 .action-btn {
-  border-radius: 999px;
-  border: 1px solid rgba(53, 42, 33, 0.2);
-  background: var(--bg-card);
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: var(--chip-surface);
   color: var(--text-primary);
-  padding: 12px 20px;
-  font-size: 14px;
+  padding: 12px 12px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
+
 .action-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 14px 35px rgba(255, 123, 156, 0.35);
 }
+
 .action-btn--ghost {
   border-style: dashed;
-  background: rgba(255, 255, 255, 0.65);
+  background: transparent;
   color: var(--text-secondary);
 }
+
 .action-btn--primary {
   border: none;
-  background: linear-gradient(120deg, var(--primary), var(--primary-hover));
-  color: #fffdf9;
-  box-shadow: var(--shadow-soft);
+  background: var(--primary);
+  color: #fffefd;
+  box-shadow: 0 25px 60px rgba(255, 123, 156, 0.45);
 }
-.action-btn--muted {
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--text-secondary);
+
+.action-btn--hero {
+  padding: 14px 24px;
+  font-weight: 700;
+  border-radius: 24px;
 }
+
+.action-btn--active {
+  background: var(--primary);
+  color: #fffefd;
+  border-color: transparent;
+  box-shadow: 0 18px 45px rgba(255, 123, 156, 0.4);
+}
+
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
 }
+
 .mode-toggle {
   display: inline-flex;
-  border-radius: 18px;
-  border: 1px solid rgba(53, 42, 33, 0.14);
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--chip-surface);
 }
+
 .mode-btn {
   border: none;
   background: transparent;
-  padding: 10px 18px;
-  font-size: 13px;
+  padding: 10px 24px;
+  font-size: 14px;
   color: var(--text-secondary);
   cursor: pointer;
   font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease;
 }
+
 .mode-btn--active {
   background: var(--primary);
-  color: #fffdf9;
+  color: #fffefd;
 }
+
+.theme-toggle {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 6px;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.theme-toggle:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
 .inline-error {
-  max-width: 1180px;
+  max-width: 1080px;
   margin: 6px auto 0;
   font-size: 13px;
   color: var(--error);
 }
-.status-strip {
-  max-width: 960px;
-  margin: 32px auto;
-  background: var(--status-card);
-  border-radius: 24px;
-  padding: 18px 26px;
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: var(--shadow-card);
-  color: var(--text-secondary);
-  font-size: 15px;
-}
-.status-strip span:first-child {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.status-strip--inactive {
-  opacity: 0.75;
-}
+
 .main-area {
   max-width: 960px;
   margin: 0 auto;
 }
+
 .help-fab {
   position: fixed;
   right: 32px;
@@ -533,31 +723,34 @@ function handleWordProgress(payload: WordProgressPayload) {
   height: 52px;
   border-radius: 18px;
   border: none;
-  background: var(--text-primary);
-  color: #fffdf9;
+  background: var(--primary);
+  color: #fffefd;
   font-size: 20px;
   cursor: pointer;
-  box-shadow: 0 25px 45px rgba(10, 13, 25, 0.25);
+  box-shadow: 0 25px 60px rgba(255, 123, 156, 0.45);
 }
+
 .help-card {
   position: fixed;
   right: 32px;
   bottom: 104px;
   width: 230px;
-  background: var(--bg-card);
+  background: var(--content-surface);
   border-radius: 20px;
   padding: 18px 20px;
-  box-shadow: var(--shadow-card);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 35px 80px rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border-strong);
   font-size: 13px;
   color: var(--text-secondary);
 }
+
 .help-title {
   margin: 0 0 8px;
   font-size: 15px;
   color: var(--text-primary);
   font-weight: 700;
 }
+
 .help-card ul {
   list-style: none;
   padding: 0;
@@ -566,35 +759,52 @@ function handleWordProgress(payload: WordProgressPayload) {
   flex-direction: column;
   gap: 6px;
 }
+
 .help-card li {
   line-height: 1.4;
 }
-@media (max-width: 768px) {
-  .app-shell {
-    padding: 28px 16px 120px;
+
+@media (max-width: 1024px) {
+
+  .masthead,
+  .control-panel {
+    max-width: 100%;
   }
-  .control-row {
+
+  .masthead {
+    gap: 10px;
+  }
+
+  .control-row,
+  .control-row--modes,
+  .control-row--actions {
     flex-direction: column;
     align-items: stretch;
   }
+
   .chip-group,
   .mode-toggle,
-  .action-btn {
+  .action-btn,
+  .action-btn--hero {
     width: 100%;
     justify-content: center;
     text-align: center;
   }
-  .source-input__row {
-    flex-direction: column;
-    align-items: stretch;
+
+  .input-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
-  .status-strip {
-    flex-direction: column;
-    align-items: flex-start;
+
+  .input-actions .action-btn {
+    flex: 1;
+    min-width: 120px;
   }
-  .help-fab,
-  .help-card {
-    right: 16px;
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 32px 16px 120px;
   }
 }
 </style>
