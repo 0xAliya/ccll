@@ -74,7 +74,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import type { WordItem, WordProgressPayload, PracticeMode } from '../types/word';
+import type { WordItem, WordProgressPayload, PracticeMode, PracticeOrderMode } from '../types/word';
 import { speak } from '../utils/speech';
 
 interface PanelStatusPayload {
@@ -88,6 +88,7 @@ interface Props {
   words: WordItem[];
   startSignal: number;
   mode: PracticeMode;
+  orderMode: PracticeOrderMode;
 }
 const props = defineProps<Props>();
 const emit = defineEmits<{
@@ -97,6 +98,7 @@ const emit = defineEmits<{
 }>();
 
 const mode = computed(() => props.mode);
+const orderMode = computed(() => props.orderMode ?? 'shuffle');
 
 const started = ref(false);
 const currentIndex = ref(0);
@@ -183,7 +185,8 @@ function startPractice() {
     resetPractice();
     return;
   }
-  sessionWords.value = shuffle(available.map(w => ({ ...w })));
+  const prepared = available.map(w => ({ ...w }));
+  sessionWords.value = orderMode.value === 'shuffle' ? shuffle(prepared) : prepared;
   started.value = true;
   currentIndex.value = 0;
   userInput.value = '';

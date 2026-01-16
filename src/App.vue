@@ -21,6 +21,29 @@
         </div>
       </div>
 
+      <div class="control-row control-row--order">
+        <div class="mode-toggle" role="group" aria-label="练习顺序">
+          <button
+            class="mode-btn"
+            :class="{ 'mode-btn--active': practiceOrderMode === 'sequential' }"
+            type="button"
+            :disabled="panelStatus.started"
+            @click="practiceOrderMode = 'sequential'"
+          >
+            顺
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ 'mode-btn--active': practiceOrderMode === 'shuffle' }"
+            type="button"
+            :disabled="panelStatus.started"
+            @click="practiceOrderMode = 'shuffle'"
+          >
+            乱
+          </button>
+        </div>
+      </div>
+
       <div class="source-input">
         <div class="source-input__wrapper">
           <input v-model="newBankUrl" class="source-input__field" placeholder="输入词库链接并导入"
@@ -79,7 +102,7 @@
     <p v-if="activeImportError" class="inline-error">{{ activeImportError }}</p>
 
     <main class="main-area">
-      <PracticePanel v-if="!showList" :words="sessionWords" :start-signal="startSignal" :mode="statusMode"
+      <PracticePanel v-if="!showList" :words="sessionWords" :start-signal="startSignal" :mode="statusMode" :order-mode="sessionOrderMode"
         @completed="handlePracticeComplete" @status-change="handleStatusChange" @word-progress="handleWordProgress" />
       <WordListPage v-else :words="activeWords" :mode="practiceMode" @update:words="handleActiveWordsUpdate"
         @close="showList = false" />
@@ -103,7 +126,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import PracticePanel from './components/PracticePanel.vue';
 import WordListPage from './components/WordListPage.vue';
 import { parseWordFile, normalizeWord } from './utils/wordParser';
-import type { WordItem, WordProgressPayload, PracticeMode } from './types/word';
+import type { WordItem, WordProgressPayload, PracticeMode, PracticeOrderMode } from './types/word';
 
 interface PanelStatus {
   current: number;
@@ -125,6 +148,7 @@ const MODES: PracticeMode[] = ['listening', 'dictation'];
 const WORD_BANKS_KEY = 'ielts_word_banks_v2';
 const SELECTED_BANK_KEY = 'ielts_selected_bank';
 const THEME_KEY = 'ielts_theme_mode';
+const ORDER_MODE_KEY = 'ielts_practice_order_mode';
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -188,6 +212,8 @@ const helpVisible = ref(false);
 const showList = ref(false);
 const practiceMode = ref<PracticeMode>('listening');
 const sessionMode = ref<PracticeMode>('listening');
+const practiceOrderMode = ref<PracticeOrderMode>('shuffle');
+const sessionOrderMode = ref<PracticeOrderMode>('shuffle');
 const theme = ref<ThemeMode>('dark');
 
 function applyThemeClass(value: ThemeMode) {
@@ -206,12 +232,34 @@ if (typeof window !== 'undefined') {
   } catch { }
 }
 
+if (typeof window !== 'undefined') {
+  try {
+    const storedOrder = localStorage.getItem(ORDER_MODE_KEY) as PracticeOrderMode | null;
+    if (storedOrder === 'shuffle' || storedOrder === 'sequential') {
+      practiceOrderMode.value = storedOrder;
+    }
+  } catch { }
+}
+
 watch(
   theme,
   value => {
     applyThemeClass(value);
     try {
       localStorage.setItem(THEME_KEY, value);
+    } catch { }
+  },
+  { immediate: true }
+);
+
+watch(
+  practiceOrderMode,
+  value => {
+    if (!panelStatus.value.started) {
+      sessionOrderMode.value = value;
+    }
+    try {
+      localStorage.setItem(ORDER_MODE_KEY, value);
     } catch { }
   },
   { immediate: true }
@@ -327,6 +375,7 @@ function handleStart() {
   }
   importErrors[practiceMode.value] = '';
   sessionMode.value = practiceMode.value;
+  sessionOrderMode.value = practiceOrderMode.value;
   startSignal.value++;
 }
 
@@ -404,7 +453,7 @@ function handleWordProgress(payload: WordProgressPayload) {
   display: flex;
   align-items: center;
   gap: 20px;
-  max-width: 960px;
+  max-width: 1060px;
 }
 
 .control-row {
@@ -421,11 +470,22 @@ function handleWordProgress(payload: WordProgressPayload) {
   justify-content: flex-start;
 }
 
+.control-row--order {
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .control-row--actions {
   flex-direction: row;
   align-items: center;
   gap: 20px;
   justify-content: flex-start;
+}
+
+.control-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
 }
 
 .source-input {
