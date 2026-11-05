@@ -1,7 +1,13 @@
 <template>
   <div class="app-shell">
     <div class="masthead">
-      <span class="hero-badge">Spell & Spark · 听力拼写练习</span>
+      <div class="brand">
+        <span class="hero-badge">Spell & Spark · 听力拼写练习</span>
+        <span class="brand-stats" v-if="activeWords.length">
+          已掌握 {{ masteredCount }} / {{ activeWords.length }}
+          <span class="brand-track"><span class="brand-fill" :style="{ width: `${masteredPercent}%` }"></span></span>
+        </span>
+      </div>
       <button type="button" class="theme-toggle" @click="theme = theme === 'dark' ? 'light' : 'dark'"
         :title="theme === 'dark' ? '切换到白天模式' : '切换到黑夜模式'">
         {{ theme === 'dark' ? '🌙' : '☀️' }}
@@ -66,15 +72,32 @@
           </div>
         </div>
         
+      <div class="preset-row">
+        <span class="preset-label">内置词库</span>
+        <button
+          v-for="preset in PRESET_BANKS"
+          :key="preset.file"
+          type="button"
+          class="preset-chip"
+          :class="{ 'preset-chip--added': hasPreset(preset) }"
+          :title="preset.desc"
+          :disabled="panelStatus.started || isLoadingWords[practiceMode]"
+          @click="importPreset(preset)"
+        >
+          {{ hasPreset(preset) ? '✓ ' : '+ ' }}{{ preset.name }}
+        </button>
+      </div>
+
       <div class="wordbank-selector" v-if="wordBanks[practiceMode].length > 0">
         <div class="wordbank-list">
-          <button
+          <div
             v-for="bank in wordBanks[practiceMode]"
             :key="bank.id"
+            role="button"
+            tabindex="0"
             class="wordbank-item"
-            :class="{ 'wordbank-item--active': selectedBankId[practiceMode] === bank.id }"
-            @click="selectWordBank(bank.id)"
-            :disabled="panelStatus.started"
+            :class="{ 'wordbank-item--active': selectedBankId[practiceMode] === bank.id, 'wordbank-item--disabled': panelStatus.started }"
+            @click="!panelStatus.started && selectWordBank(bank.id)"
           >
             <span class="wordbank-name">{{ bank.name }}</span>
             <span class="wordbank-count">{{ bank.words.filter(w => w.tag !== 'skip').length }}</span>
@@ -86,7 +109,7 @@
             >
               ×
             </button>
-          </button>
+          </div>
         </div>
       </div>
 
@@ -112,8 +135,9 @@
     <div class="help-card" v-if="helpVisible">
       <p class="help-title">快捷键</p>
       <ul>
-        <li>Enter · 提交</li>
+        <li>Enter · 提交 / 下一题</li>
         <li>Space · 下一题</li>
+        <li>Tab · 提示一个字母</li>
         <li>Ctrl+P · 重播</li>
         <li>Esc · 重置</li>
       </ul>
@@ -126,7 +150,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import PracticePanel from './components/PracticePanel.vue';
 import WordListPage from './components/WordListPage.vue';
 import { parseWordFile, normalizeWord } from './utils/wordParser';
-import type { WordItem, WordProgressPayload, PracticeMode, PracticeOrderMode } from './types/word';
+import type { WordItem, WordProgressPayload, PracticeMode, PracticeOrderMode, PresetBank } from './types/word';
 
 interface PanelStatus {
   current: number;
@@ -149,6 +173,18 @@ const WORD_BANKS_KEY = 'ielts_word_banks_v2';
 const SELECTED_BANK_KEY = 'ielts_selected_bank';
 const THEME_KEY = 'ielts_theme_mode';
 const ORDER_MODE_KEY = 'ielts_practice_order_mode';
+
+// public/ 下自带的词库，听写默写都能用
+const PRESET_BANKS: PresetBank[] = [
+  { file: 'wordlist.txt', name: '场景词组', desc: '校园 / 职场高频场景词组' },
+  { file: '固定搭配.txt', name: '固定搭配', desc: '常用动词短语与介词搭配' },
+  { file: 'dictation.txt', name: '听写句子', desc: '日常问句整句听写' },
+];
+const DEFAULT_PRESET: Record<PracticeMode, string> = { listening: 'wordlist.txt', dictation: '固定搭配.txt' };
+
+function presetUrl(preset: PresetBank): string {
+  return `${import.meta.env.BASE_URL}${encodeURIComponent(preset.file)}`;
+}
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -288,6 +324,11 @@ const sessionWords = computed(() => {
   return bank ? bank.words : [];
 });
 
+const masteredCount = computed(() => activeWords.value.filter(w => w.tag === 'easy').length);
+const masteredPercent = computed(() =>
+  activeWords.value.length ? Math.round((masteredCount.value / activeWords.value.length) * 100) : 0
+);
+
 const activeImportError = computed(() => importErrors[practiceMode.value]);
 const hasWords = computed(() => activeWords.value.some(w => w.tag !== 'skip'));
 const statusMode = computed<PracticeMode>(() => (panelStatus.value.started ? sessionMode.value : practiceMode.value));
@@ -321,6 +362,21 @@ function deleteWordBank(bankId: string) {
   }
 }
 
+function hasPreset(preset: PresetBank): boolean {
+  const url = presetUrl(preset);
+  return wordBanks[practiceMode.value].some(b => b.url === url);
+}
+
+async function importPreset(preset: PresetBank, mode: PracticeMode = practiceMode.value) {
+  const url = presetUrl(preset);
+  const existing = wordBanks[mode].find(b => b.url === url);
+  if (existing) {
+    selectedBankId[mode] = existing.id;
+    return;
+  }
+  await loadBank(mode, url, preset.name);
+}
+
 async function importNewBank() {
   const mode = practiceMode.value;
   importErrors[mode] = '';
@@ -329,10 +385,16 @@ async function importNewBank() {
     importErrors[mode] = '请填写词库链接';
     return;
   }
-  
   const name = newBankName.value.trim() || `词库 ${wordBanks[mode].length + 1}`;
+  if (await loadBank(mode, url, name)) {
+    newBankUrl.value = '';
+    newBankName.value = '';
+  }
+}
+
+async function loadBank(mode: PracticeMode, url: string, name: string): Promise<boolean> {
+  importErrors[mode] = '';
   isLoadingWords[mode] = true;
-  
   try {
     const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) {
@@ -354,15 +416,25 @@ async function importNewBank() {
       };
       wordBanks[mode].push(newBank);
       selectedBankId[mode] = newBank.id;
-      newBankUrl.value = '';
-      newBankName.value = '';
+      return true;
     }
   } catch (err) {
     importErrors[mode] = '读取词库失败，请检查链接或网络';
   } finally {
     isLoadingWords[mode] = false;
   }
+  return false;
 }
+
+// 首次打开没有任何词库时，自动装上内置词库，打开即可练
+onMounted(() => {
+  for (const mode of MODES) {
+    if (wordBanks[mode].length === 0) {
+      const preset = PRESET_BANKS.find(p => p.file === DEFAULT_PRESET[mode]);
+      if (preset) importPreset(preset, mode);
+    }
+  }
+});
 
 function handleStart() {
   if (!activeWords.value.length) {
@@ -439,6 +511,76 @@ function handleWordProgress(payload: WordProgressPayload) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.brand-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.brand-track {
+  width: 90px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+
+.brand-fill {
+  display: block;
+  height: 100%;
+  background: var(--success);
+  transition: width 0.3s ease;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.preset-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+  margin-right: 4px;
+}
+
+.preset-chip {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.preset-chip:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.preset-chip--added {
+  border-style: solid;
+  color: var(--success);
+}
+
+.preset-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .hero-badge {
@@ -578,7 +720,7 @@ function handleWordProgress(payload: WordProgressPayload) {
   transition: all 0.2s ease;
 }
 
-.wordbank-item:hover:not(:disabled) {
+.wordbank-item:hover:not(.wordbank-item--disabled) {
   background: var(--input-surface);
   border-color: var(--primary);
 }
@@ -589,7 +731,7 @@ function handleWordProgress(payload: WordProgressPayload) {
   border-color: var(--primary);
 }
 
-.wordbank-item:disabled {
+.wordbank-item--disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -865,6 +1007,22 @@ function handleWordProgress(payload: WordProgressPayload) {
 @media (max-width: 768px) {
   .app-shell {
     padding: 32px 16px 120px;
+  }
+
+  .control-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .source-input__wrapper {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .source-input__actions {
+    width: 100%;
+    padding: 0 12px 12px;
+    flex-wrap: wrap;
   }
 }
 </style>

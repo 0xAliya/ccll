@@ -14,3 +14,17 @@ export interface WordProgressPayload {
   word: string;
   correctCount: number;
 }
+
+export interface PresetBank {
+  file: string;
+  name: string;
+  desc: string;
+}
+
+export interface SessionSummary {
+  total: number;
+  correct: number;
+  answered: number;
+  seconds: number;
+  wrongWords: WordItem[];
+}

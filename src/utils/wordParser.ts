@@ -28,3 +28,28 @@ export function parseWordFile(content: string, filename = 'remote.txt'): WordIte
   }
   return words;
 }
+// 比较答案时忽略大小写、首尾标点和多余空格
+export function canonicalAnswer(text: string): string {
+  return normalizeWord(text)
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[.,!?;:"“”。，！？；：]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export interface DiffChar {
+  char: string;
+  ok: boolean;
+}
+
+// 逐字符对比，标出用户答案里错的位置
+export function diffAnswer(input: string, answer: string): DiffChar[] {
+  const result: DiffChar[] = [];
+  for (let i = 0; i < answer.length; i++) {
+    const a = answer[i];
+    const b = input[i];
+    result.push({ char: a, ok: b !== undefined && b.toLowerCase() === a.toLowerCase() });
+  }
+  return result;
+}

@@ -16,6 +16,23 @@
       <span v-if="addError" class="error-text">{{ addError }}</span>
     </form>
 
+    <div class="filter-row">
+      <input v-model="keyword" class="search-input" placeholder="🔍 搜索英文或中文" />
+      <div class="filter-chips">
+        <button
+          v-for="f in FILTERS"
+          :key="f.key"
+          type="button"
+          class="filter-chip"
+          :class="{ 'filter-chip--active': filter === f.key }"
+          @click="filter = f.key"
+        >
+          {{ f.label }} {{ countBy(f.key) }}
+        </button>
+      </div>
+      <button type="button" class="mini-btn ghost" @click="exportWords">导出 txt</button>
+    </div>
+
     <div class="table-wrapper">
       <table>
         <thead>
@@ -27,9 +44,9 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in words" :key="item.word">
+          <tr v-for="item in visibleWords" :key="item.word">
             <td>
-              <strong>{{ item.word }}</strong>
+              <strong class="word-play" @click="speak(item.word)" title="点击发音">{{ item.word }}</strong>
               <span class="count-pill" v-if="item.correctCount">✔ {{ item.correctCount }}</span>
             </td>
             <td>{{ item.meaning }}</td>
@@ -57,10 +74,11 @@
               >
                 清除标记
               </button>
+              <button type="button" class="mini-btn danger" @click="removeWord(item)">删除</button>
             </td>
           </tr>
-          <tr v-if="!words.length">
-            <td colspan="4" class="empty-row">暂无单词，请先导入或新增 🌱</td>
+          <tr v-if="!visibleWords.length">
+            <td colspan="4" class="empty-row">{{ words.length ? '没有符合条件的单词' : '暂无单词，请先导入或新增 🌱' }}</td>
           </tr>
         </tbody>
       </table>
@@ -72,6 +90,17 @@
 import { ref, computed } from 'vue';
 import type { WordItem, PracticeMode } from '../types/word';
 import { normalizeWord } from '../utils/wordParser';
+import { speak } from '../utils/speech';
+
+type FilterKey = 'all' | 'active' | 'easy' | 'skip';
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'active', label: '练习中' },
+  { key: 'easy', label: '已掌握' },
+  { key: 'skip', label: '跳过' },
+];
+// 一次最多渲染这么多行，词库上千条时保持流畅
+const PAGE_LIMIT = 300;
 
 interface Props {
   words: WordItem[];
@@ -84,6 +113,42 @@ const emit = defineEmits<{ (e: 'update:words', value: WordItem[]): void; (e: 'cl
 const newWord = ref('');
 const newMeaning = ref('');
 const addError = ref('');
+const keyword = ref('');
+const filter = ref<FilterKey>('all');
+
+function matchFilter(item: WordItem, key: FilterKey): boolean {
+  if (key === 'all') return true;
+  if (key === 'active') return !item.tag;
+  return item.tag === key;
+}
+
+function countBy(key: FilterKey): number {
+  return props.words.filter(w => matchFilter(w, key)).length;
+}
+
+const visibleWords = computed(() => {
+  const kw = keyword.value.trim().toLowerCase();
+  return props.words
+    .filter(w => matchFilter(w, filter.value))
+    .filter(w => !kw || w.word.toLowerCase().includes(kw) || w.meaning.includes(kw))
+    .slice(0, PAGE_LIMIT);
+});
+
+function removeWord(item: WordItem) {
+  const key = canonical(item.word);
+  emit('update:words', props.words.filter(w => canonical(w.word) !== key));
+}
+
+function exportWords() {
+  const text = props.words.map(w => `${w.word}=${w.meaning}`).join('\n');
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `词库-${modeLabel.value}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 const modeLabel = computed(() => (props.mode === 'listening' ? '听力拼写' : '中文默写'));
 
 const canonical = (text: string) => normalizeWord(text).toLowerCase();
@@ -223,7 +288,7 @@ td {
   text-align: left;
 }
 tbody tr + tr {
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  border-top: 1px solid var(--border-soft);
 }
 .empty-row {
   text-align: center;
@@ -247,8 +312,52 @@ tbody tr + tr {
   font-weight: 600;
 }
 .tag-active {
-  background: rgba(79, 70, 229, 0.12);
-  color: #3730a3;
+  background: rgba(124, 168, 255, 0.14);
+  color: var(--secondary);
+}
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  border-radius: 18px;
+  border: 1px solid var(--border-soft);
+  padding: 10px 16px;
+  background: var(--input-surface);
+  color: var(--text-primary);
+}
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filter-chip {
+  border: 1px solid var(--border-soft);
+  background: var(--chip-surface);
+  color: var(--text-secondary);
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filter-chip--active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fffefd;
+}
+.word-play {
+  cursor: pointer;
+}
+.word-play:hover {
+  color: var(--primary);
+}
+.mini-btn.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
 }
 .tag-skip {
   background: rgba(239, 68, 68, 0.12);

@@ -4,11 +4,12 @@
       <div class="mode-flag">
         <span class="mode-icon">{{ modeIcon }}</span>
         <div class="mode-meta">
-          <p class="mode-title">{{ modeTitle }}</p>
+          <p class="mode-title">{{ modeTitle }}<span v-if="isRetryRound" class="round-chip">错词重练</span></p>
           <p class="session-progress">{{ sessionProgressText }}</p>
         </div>
       </div>
       <div class="metrics">
+        <span class="metrics-text" v-if="started">⏱ {{ elapsedText }}</span>
         <span class="metrics-text">正确率 {{ accuracy }}%</span>
         <div class="progress-track">
           <span class="progress-fill" :style="{ width: `${progressPercent}%` }"></span>
@@ -25,7 +26,39 @@
       </button>
     </div>
 
-    <div class="practice-main">
+    <div class="summary" v-if="summary && !started">
+      <p class="summary-title">{{ summaryHeadline }}</p>
+      <div class="summary-grid">
+        <div class="summary-stat">
+          <span class="summary-value">{{ summary.total }}</span>
+          <span class="summary-label">本轮词数</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-value">{{ summaryAccuracy }}%</span>
+          <span class="summary-label">首答正确率</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-value">{{ formatSeconds(summary.seconds) }}</span>
+          <span class="summary-label">用时</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-value">{{ summary.wrongWords.length }}</span>
+          <span class="summary-label">错词</span>
+        </div>
+      </div>
+      <div class="summary-wrong" v-if="summary.wrongWords.length">
+        <p class="summary-sub">本轮错词</p>
+        <ul>
+          <li v-for="item in summary.wrongWords" :key="item.word" @click="speak(item.word, 'en-US', speechRate)">
+            <strong>{{ item.word }}</strong>
+            <span>{{ item.meaning }}</span>
+          </li>
+        </ul>
+        <button type="button" class="summary-btn" @click="retryWrong">🔁 只练这 {{ summary.wrongWords.length }} 个错词</button>
+      </div>
+    </div>
+
+    <div class="practice-main" v-else>
       <div class="prompt-stack">
         <div class="playback-hint" :class="{ 'playback-hint--idle': !started }">
           <button
@@ -44,17 +77,27 @@
         </div>
       </div>
 
+      <p class="letter-hint" v-if="started && !showResult">{{ letterHint }}</p>
+
       <form class="answer-form" @submit.prevent="submitSpelling">
         <input
           v-model="userInput"
           class="answer-input"
           :class="answerState"
           :disabled="!started || showResult"
-          :placeholder="mode === 'listening' ? '请输入听到的英文单词' : '根据中文输入英文句子/单词'"
+          :placeholder="mode === 'listening' ? '请输入听到的英文' : '根据中文输入英文'"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
           ref="inputRef"
         />
         <button type="submit" class="sr-only">提交</button>
       </form>
+
+      <div class="assist-row" v-if="started && !showResult">
+        <button type="button" class="assist-btn" @click="revealLetter" title="提示下一个字母 (Tab)">💡 提示</button>
+        <button type="button" class="assist-btn" @click="giveUp" title="直接看答案">🙈 不会</button>
+      </div>
     </div>
 
     <label class="slider-row" v-if="mode === 'listening' && started">
@@ -64,18 +107,26 @@
 
     <div class="feedback" v-if="showResult">
       <p :class="isCorrect ? 'feedback-correct' : 'feedback-wrong'">{{ resultText }}</p>
+      <p class="feedback-diff" v-if="!isCorrect && lastInput">
+        你的答案：<span class="diff-user">{{ lastInput }}</span>
+      </p>
       <div class="feedback-meaning">
-        <p class="meaning-word">{{ currentWord?.word }}</p>
+        <p class="meaning-word">
+          <span v-for="(c, i) in answerDiff" :key="i" :class="{ 'diff-bad': !isCorrect && !c.ok && c.char !== ' ' }">{{ c.char }}</span>
+          <button type="button" class="meaning-play" @click="speak(currentWord?.word || '', 'en-US', speechRate)">🔊</button>
+        </p>
         <p class="meaning-translation">{{ currentWord?.meaning }}</p>
       </div>
+      <p class="feedback-next">按 Space 继续</p>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import type { WordItem, WordProgressPayload, PracticeMode, PracticeOrderMode } from '../types/word';
+import type { WordItem, WordProgressPayload, PracticeMode, PracticeOrderMode, SessionSummary } from '../types/word';
 import { speak } from '../utils/speech';
+import { canonicalAnswer, diffAnswer } from '../utils/wordParser';
 
 interface PanelStatusPayload {
   current: number;
@@ -92,7 +143,7 @@ interface Props {
 }
 const props = defineProps<Props>();
 const emit = defineEmits<{
-  (e: 'completed'): void;
+  (e: 'completed', value: SessionSummary | null): void;
   (e: 'status-change', value: PanelStatusPayload): void;
   (e: 'word-progress', value: WordProgressPayload): void;
 }>();
@@ -103,6 +154,7 @@ const orderMode = computed(() => props.orderMode ?? 'shuffle');
 const started = ref(false);
 const currentIndex = ref(0);
 const userInput = ref('');
+const lastInput = ref('');
 const showResult = ref(false);
 const isCorrect = ref(false);
 const resultText = ref('');
@@ -111,6 +163,14 @@ const answeredCount = ref(0);
 const speechRate = ref(1);
 const inputRef = ref<HTMLInputElement | null>(null);
 const sessionWords = ref<WordItem[]>([]);
+const uniqueTotal = ref(0);
+const hintsUsed = ref(0);
+const wrongMap = ref(new Map<string, WordItem>());
+const summary = ref<SessionSummary | null>(null);
+const isRetryRound = ref(false);
+const startedAt = ref(0);
+const now = ref(Date.now());
+let timer: number | undefined;
 
 const accuracy = computed(() =>
   answeredCount.value
@@ -120,9 +180,11 @@ const accuracy = computed(() =>
 const currentWord = computed(() => sessionWords.value[currentIndex.value]);
 const modeIcon = computed(() => (mode.value === 'listening' ? '🎧' : '⌨️'));
 const modeTitle = computed(() => (mode.value === 'listening' ? '听力拼写' : '中文默写'));
-const sessionProgressText = computed(() =>
-  started.value ? `第 ${currentIndex.value + 1} / ${sessionWords.value.length}` : '等待开始'
-);
+const sessionProgressText = computed(() => {
+  if (started.value) return `第 ${currentIndex.value + 1} / ${sessionWords.value.length}`;
+  return summary.value ? '本轮完成' : '等待开始';
+});
+const elapsedText = computed(() => formatSeconds(Math.floor((now.value - startedAt.value) / 1000)));
 
 const dictationPrompt = computed(() => {
   if (mode.value !== 'dictation') return '';
@@ -132,12 +194,18 @@ const dictationPrompt = computed(() => {
   const preview = props.words.find(w => w.tag !== 'skip');
   return preview?.meaning || '等待开始';
 });
-const dictationPromptTitle = computed(() =>
-  started.value ? '当前中文释义' : '预览中文释义'
-);
+// 字母占位提示：每个字母一个下划线，已提示的字母直接显示
+const letterHint = computed(() => {
+  const word = currentWord.value?.word ?? '';
+  return word
+    .split('')
+    .map((c, i) => (c === ' ' ? '  ' : /[a-z]/i.test(c) ? (i < hintsUsed.value ? c : '_') : c))
+    .join(' ');
+});
+const answerDiff = computed(() => diffAnswer(lastInput.value, currentWord.value?.word ?? ''));
 const progressPercent = computed(() => {
   const total = sessionWords.value.length;
-  if (!total || !started.value) return 0;
+  if (!total || !started.value) return summary.value ? 100 : 0;
   const completed = Math.min(currentIndex.value + (showResult.value ? 1 : 0), total);
   return Math.round((completed / total) * 100);
 });
@@ -145,6 +213,24 @@ const answerState = computed(() => {
   if (!showResult.value) return '';
   return isCorrect.value ? 'answer-input--correct' : 'answer-input--wrong';
 });
+const summaryAccuracy = computed(() => {
+  const s = summary.value;
+  if (!s || !s.total) return 0;
+  return Math.round(((s.total - s.wrongWords.length) / s.total) * 100);
+});
+const summaryHeadline = computed(() => {
+  const acc = summaryAccuracy.value;
+  if (acc === 100) return '🏆 全对！完美的一轮';
+  if (acc >= 85) return '🎉 很棒，继续保持';
+  if (acc >= 60) return '💪 不错，把错词再过一遍';
+  return '📚 先把错词练熟再往下走';
+});
+
+function formatSeconds(total: number): string {
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
 
 function pushStatus() {
   emit('status-change', {
@@ -179,28 +265,50 @@ watch(
   }
 );
 
+function beginSession(list: WordItem[], retry: boolean) {
+  const prepared = list.map(w => ({ ...w }));
+  sessionWords.value = orderMode.value === 'shuffle' || retry ? shuffle(prepared) : prepared;
+  uniqueTotal.value = prepared.length;
+  isRetryRound.value = retry;
+  wrongMap.value = new Map();
+  summary.value = null;
+  started.value = true;
+  currentIndex.value = 0;
+  correctCount.value = 0;
+  answeredCount.value = 0;
+  startedAt.value = Date.now();
+  now.value = startedAt.value;
+  window.clearInterval(timer);
+  timer = window.setInterval(() => (now.value = Date.now()), 1000);
+  resetQuestion();
+  speakCurrent();
+  focusInput();
+}
+
 function startPractice() {
   const available = props.words.filter(w => w.tag !== 'skip');
   if (!available.length) {
     resetPractice();
     return;
   }
-  const prepared = available.map(w => ({ ...w }));
-  sessionWords.value = orderMode.value === 'shuffle' ? shuffle(prepared) : prepared;
-  started.value = true;
-  currentIndex.value = 0;
+  beginSession(available, false);
+}
+
+function retryWrong() {
+  if (!summary.value?.wrongWords.length) return;
+  beginSession(summary.value.wrongWords, true);
+}
+
+function resetQuestion() {
   userInput.value = '';
+  lastInput.value = '';
   showResult.value = false;
   isCorrect.value = false;
   resultText.value = '';
-  correctCount.value = 0;
-  answeredCount.value = 0;
-  speakCurrent();
-  focusInput();
+  hintsUsed.value = 0;
 }
 
 function playCurrentWord() {
-  if (mode.value === 'dictation') return;
   if (currentWord.value) {
     speak(currentWord.value.word, 'en-US', speechRate.value);
   }
@@ -211,33 +319,63 @@ function speakCurrent() {
   playCurrentWord();
 }
 
+function revealLetter() {
+  if (!started.value || showResult.value || !currentWord.value) return;
+  const word = currentWord.value.word;
+  if (hintsUsed.value >= word.length) return;
+  hintsUsed.value++;
+  while (hintsUsed.value < word.length && !/[a-z]/i.test(word[hintsUsed.value - 1])) hintsUsed.value++;
+  userInput.value = word.slice(0, hintsUsed.value);
+  focusInput();
+}
+
+function markWrong(word: WordItem) {
+  wrongMap.value.set(word.word.toLowerCase(), word);
+  // 错的词放到队尾再考一次
+  sessionWords.value.push({ ...word });
+}
+
+function giveUp() {
+  if (showResult.value || !currentWord.value) return;
+  lastInput.value = '';
+  isCorrect.value = false;
+  showResult.value = true;
+  answeredCount.value++;
+  resultText.value = '👀 记住它，稍后再考一次';
+  markWrong(currentWord.value);
+  playCurrentWord();
+}
+
 function submitSpelling() {
   if (showResult.value || !currentWord.value) return;
-  const input = userInput.value.trim().toLowerCase();
-  const answer = currentWord.value.word.trim().toLowerCase();
-  isCorrect.value = input === answer;
+  if (!userInput.value.trim()) return;
+  lastInput.value = userInput.value.trim();
+  isCorrect.value = canonicalAnswer(userInput.value) === canonicalAnswer(currentWord.value.word);
   showResult.value = true;
   answeredCount.value++;
   if (isCorrect.value) {
-    resultText.value = '✔️ 正确！';
     correctCount.value++;
-    const newCount = (currentWord.value.correctCount ?? 0) + 1;
-    sessionWords.value[currentIndex.value].correctCount = newCount;
-    emit('word-progress', { word: currentWord.value.word, correctCount: newCount });
+    // 用了提示的不算掌握次数
+    if (hintsUsed.value === 0) {
+      resultText.value = '✔️ 正确！';
+      const newCount = (currentWord.value.correctCount ?? 0) + 1;
+      sessionWords.value[currentIndex.value].correctCount = newCount;
+      emit('word-progress', { word: currentWord.value.word, correctCount: newCount });
+    } else {
+      resultText.value = '✔️ 正确（用了提示，不计入掌握）';
+    }
   } else {
     resultText.value = '❌ 错误！';
-    sessionWords.value.push(currentWord.value);
+    markWrong(currentWord.value);
   }
+  if (mode.value === 'dictation') playCurrentWord();
 }
 
 function nextWord() {
   if (!showResult.value) return;
   if (currentIndex.value < sessionWords.value.length - 1) {
     currentIndex.value++;
-    userInput.value = '';
-    showResult.value = false;
-    isCorrect.value = false;
-    resultText.value = '';
+    resetQuestion();
     speakCurrent();
     focusInput();
   } else {
@@ -246,21 +384,30 @@ function nextWord() {
 }
 
 function resetPractice() {
+  window.clearInterval(timer);
   started.value = false;
   currentIndex.value = 0;
-  userInput.value = '';
-  showResult.value = false;
-  isCorrect.value = false;
-  resultText.value = '';
+  resetQuestion();
   correctCount.value = 0;
   answeredCount.value = 0;
   sessionWords.value = [];
-  emit('completed');
+  summary.value = null;
+  isRetryRound.value = false;
+  emit('completed', null);
 }
 
 function finishSession() {
+  window.clearInterval(timer);
   started.value = false;
-  emit('completed');
+  showResult.value = false;
+  summary.value = {
+    total: uniqueTotal.value,
+    correct: correctCount.value,
+    answered: answeredCount.value,
+    seconds: Math.floor((Date.now() - startedAt.value) / 1000),
+    wrongWords: [...wrongMap.value.values()],
+  };
+  emit('completed', summary.value);
 }
 
 function focusInput() {
@@ -269,18 +416,26 @@ function focusInput() {
 
 function handleKeydown(e: KeyboardEvent) {
   if (!started.value) return;
-  if (mode.value === 'listening' && e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
+  // 焦点在别的输入框（如词库链接）时不抢按键
+  const target = e.target as HTMLElement | null;
+  if (target && target !== inputRef.value && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
+  if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
     // Ctrl+P: 播放
     e.preventDefault();
     playCurrentWord();
+  } else if (e.key === 'Tab') {
+    // Tab: 提示一个字母
+    e.preventDefault();
+    revealLetter();
   } else if (e.key === 'Escape') {
     // Esc: 重置
     e.preventDefault();
     resetPractice();
   } else if (e.key === 'Enter') {
-    // Enter: 提交
+    // Enter: 提交 / 已出结果时进入下一题
     e.preventDefault();
-    submitSpelling();
+    if (showResult.value) nextWord();
+    else submitSpelling();
   } else if (e.key === ' ') {
     // 空格：下一个单词
     if (showResult.value) {
@@ -295,6 +450,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
+  window.clearInterval(timer);
 });
 
 watch(speechRate, () => {
@@ -572,6 +728,161 @@ function shuffle<T>(source: T[]): T[] {
 .meaning-translation {
   font-size: 16px;
   color: var(--text-secondary);
+}
+.round-chip {
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255, 123, 156, 0.16);
+  color: var(--primary);
+  vertical-align: middle;
+}
+.letter-hint {
+  margin: 0;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+  white-space: pre-wrap;
+  text-align: center;
+}
+.assist-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.assist-btn {
+  border: 1px solid var(--border-soft);
+  background: var(--chip-surface);
+  color: var(--text-secondary);
+  border-radius: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.assist-btn:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+.feedback-diff {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--text-subtle);
+}
+.diff-user {
+  color: var(--error);
+  text-decoration: line-through;
+  font-weight: 600;
+}
+.diff-bad {
+  color: var(--error);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+.meaning-play {
+  margin-left: 10px;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.feedback-next {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+}
+.summary-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.summary-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.summary-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 8px;
+  border-radius: 18px;
+  background: var(--chip-surface);
+  border: 1px solid var(--border-soft);
+}
+.summary-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.summary-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+.summary-wrong {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.summary-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+.summary-wrong ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.summary-wrong li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--input-surface);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.summary-wrong li strong {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+.summary-btn {
+  align-self: center;
+  border: none;
+  border-radius: 18px;
+  padding: 12px 24px;
+  background: var(--primary);
+  color: #fffefd;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+@media (max-width: 640px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 .sr-only {
   position: absolute;
